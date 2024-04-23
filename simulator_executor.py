@@ -10,7 +10,7 @@ from simulator_base_constants import *
 from simulator_base_classes import *
 from simulator_base_functions import *
 
-def runSimulator(sceneGenerator, algorithm, metricsWriter):
+def runSimulator(sceneGenerator, algorithm, metricsWriter, width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT, O = DEFAULT_O):
     if drawing:
         #При визуализации запускаемся только один раз
         simulationCount = 1
@@ -24,7 +24,7 @@ def runSimulator(sceneGenerator, algorithm, metricsWriter):
     if drawing:
         pygame.init()
         clock = pygame.time.Clock()
-        sc = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
+        sc = pygame.display.set_mode((width , height))
         sc.fill(BGCOLOR)
     
     while simulationCount > 0:
