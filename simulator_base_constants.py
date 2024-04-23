@@ -8,8 +8,8 @@ import time
 import matplotlib.pyplot as plt
 import pandas as pd
 
-WIN_WIDTH = 604
-WIN_HEIGHT = 404
+WIN_WIDTH = 504
+WIN_HEIGHT = 504
 
 #задаются константы
 anchorCnt = 240
@@ -24,6 +24,6 @@ spawnAttemtsCount = 100
 spawnGrowthSpeed = 1.1
 
 drawing = True
-saving = False
+saving = True
 anchorDrawing = False
 maxrunning = 2400#2400 # 1 секунда == 50 кадров

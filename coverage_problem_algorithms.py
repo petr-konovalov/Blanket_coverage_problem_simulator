@@ -302,6 +302,9 @@ class DSSAAlgorithm(Algorithm):
         return newV
 
 class SODAAlgorithm(DSSAAlgorithm):
+    def getName(self):
+        return 'SODA'
+    
     def partialForce(self, C, D, vec, dst):
         return -C * (D / (self.mu * (D if D > self.mu else self.mu))) * (RVis - dst) * vec / dst
 

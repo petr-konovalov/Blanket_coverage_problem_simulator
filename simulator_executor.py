@@ -10,9 +10,9 @@ from simulator_base_constants import *
 from simulator_base_classes import *
 from simulator_base_functions import *
 
-#если происходит прорисовка то симуляция не должна запускаться много раз
 def runSimulator(sceneGenerator, algorithm, metricsWriter):
     if drawing:
+        #При визуализации запускаемся только один раз
         simulationCount = 1
         if saving:
             dirPath = "Experiment as scene " + sceneGenerator.getName() + " with algorithm " + algorithm.getName() + " robots count " +str(rCnts[0])
@@ -40,21 +40,16 @@ def runSimulator(sceneGenerator, algorithm, metricsWriter):
         running = 1
         energy = 0
         startPoints = [obj.getPos() for obj in objs[:rCnt]]
-        while running >= 0 and (running <= maxrunning or drawing):
+        while running >= 0 and running <= maxrunning:
+            #Прорисовка роботов
             if drawing:
                 StartTime = time.time()
                 for i in pygame.event.get():
-                    if i.type == pygame.QUIT: running = -100500
-                drawDist = 50
+                    if i.type == pygame.QUIT: running = -10
                 for j in range(0, rCnt + (anchorCnt if anchorDrawing else 0)):
                     if objs[j].isLive():
                         objs[j].draw(sc, O)
                 pygame.display.update()
-                if running >= maxrunning:
-                    if running == maxrunning:
-                        print('simulation end')
-                    running = running + 1
-                    continue
             #Костыль для SSND
             if hasattr(algorithm, 'calcEligibility'):
                 for j in range(0, rCnt):
@@ -68,12 +63,12 @@ def runSimulator(sceneGenerator, algorithm, metricsWriter):
                     objs[j].setV(newV)                            
                     sumV += la.norm(newV)
                     energy += la.norm(newV) / 100
+            #Проверка завершения эксперимента и сбор метрик
             if checkTerminateCondition(running, maxrunning, sumV, rCnt, maxV):
                 robotAreaCnt, workAreaCnt, sensorCoverageUniformity, uniformity = calculateMetrics(objs, rCnt, objectsDescriptor, RVis, running)
                 metricsWriter(rCnt, running * 0.02, energy, np.mean([la.norm(objs[k].getPos() - startPoints[k]) for k in range(0, rCnt)])/100, robotAreaCnt / workAreaCnt * 100, uniformity, sensorCoverageUniformity)
                 running = maxrunning
-    
-            #стираем роботов
+            #Стирание роботов и прорисовка границ объектов
             if drawing:
                 if saving:
                     pygame.image.save(sc, dirPath + "/Frame " + str(running).zfill(6) + ".png")
