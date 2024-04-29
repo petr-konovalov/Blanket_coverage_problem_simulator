@@ -75,7 +75,8 @@ def runSimulator(sceneGenerator, algorithm, metricsWriter, width = DEFAULT_WIDTH
                 for j in range(0, rCnt):
                     if objs[j].isLive():
                         objs[j].hide(sc, O)
-                drawSceneWalls(sc, O, objectsDescriptor)
+                if wallsDrawing:
+                    drawSceneWalls(sc, O, objectsDescriptor)
     
             sm.action()
             

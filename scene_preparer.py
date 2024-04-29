@@ -23,18 +23,18 @@ def drawSceneWalls(sc, O, objectsDescriptor):
         for l in range(0, len(angles)):
             pntL = angles[l] * scale + O
             pntR = angles[0 if l + 1 == len(angles) else l + 1] * scale + O
-            pygame.draw.line(sc, WALLCOLOR, (pntL[0], pntL[1]), (pntR[0], pntR[1]), 10)
-    
+            pygame.draw.line(sc, WALLCOLOR, (pntL[0], pntL[1]), (pntR[0], pntR[1]), 10)            
+
 def generateSceneByDescriptor(objectsDescriptor, objs, rCnt):
-    edgesCount = sum([len(angles) for angles in objectsDescriptor])
-    pointPerEdge = int(ceil(anchorCnt/edgesCount))
+    correctedAnchorCount = 0
+    perimeter = sum([sum([la.norm(a2 - a1) for a1, a2 in zip(a, np.roll(a, len(a[0])))]) for a in objectsDescriptor])
     for angles in objectsDescriptor:
-        for j in range(0, len(angles) - 1):
+        for a1, a2 in zip(angles, np.roll(angles, len(angles[0]))):
+            pointPerEdge = int(ceil(anchorCnt / perimeter * la.norm(a2 - a1)))
+            correctedAnchorCount += pointPerEdge
             for k in range(0, pointPerEdge):
-                objs.append(Robot((angles[j]*k+angles[j+1]*(pointPerEdge-k))/pointPerEdge, color = WALLCOLOR, state = 'wall'))
-        for k in range(0, pointPerEdge):
-            objs.append(Robot((angles[-1]*k+angles[0]*(pointPerEdge-k))/pointPerEdge, color = WALLCOLOR, state = 'wall'))
-    return pointPerEdge * edgesCount
+                objs.append(Robot((a2*k+a1*(pointPerEdge-k))/pointPerEdge, color = WALLCOLOR, state = 'wall'))
+    return correctedAnchorCount
 
 class SceneGenerator:
     def generate(self, objs):
@@ -46,8 +46,8 @@ class SceneGenerator:
 
 class OSceneGenerator(SceneGenerator):
     def generate(self, objs):
-        objectsDescriptor = [[np.array([-500, -500, 0]), np.array([-500,  500, 0]), np.array([ 500,  500, 0]), np.array([ 500, -500, 0])],
-                             [np.array([-150, -150, 0]), np.array([-150,  150, 0]), np.array([ 150,  150, 0]), np.array([ 150, -150, 0])]]
+        objectsDescriptor = np.array([[[-500, -500, 0], [-500,  500, 0], [ 500,  500, 0], [ 500, -500, 0]],
+                                      [[-150, -150, 0], [-150,  150, 0], [ 150,  150, 0], [ 150, -150, 0]]])
         return objectsDescriptor, generateSceneByDescriptor(objectsDescriptor, objs, len(objs))
     def getSpawnPoint(self):
         return np.array([-300, 0, 0])
@@ -56,8 +56,8 @@ class OSceneGenerator(SceneGenerator):
     
 class ButterflySceneGenerator(SceneGenerator):
     def generate(self, objs, cW = 150):
-        objectsDescriptor = [[np.array([-600, -400, 0]), np.array([-600,  400, 0]), np.array([   0, cW/2, 0]),
-                              np.array([ 600,  400, 0]), np.array([ 600, -400, 0]), np.array([   0,-cW/2, 0])]]
+        objectsDescriptor = np.array([[[-600, -400, 0], [-600,  400, 0], [   0, cW/2, 0],
+                                       [ 600,  400, 0], [ 600, -400, 0], [   0,-cW/2, 0]]])
         return objectsDescriptor, generateSceneByDescriptor(objectsDescriptor, objs, len(objs))
     def getSpawnPoint(self):
         return np.array([-300, 0, 0])
@@ -66,9 +66,9 @@ class ButterflySceneGenerator(SceneGenerator):
 
 class TwoBoxesSceneGenerator(SceneGenerator):
     def generate(self, objs):
-        objectsDescriptor = [[np.array([-500, -500, 0]), np.array([-500,  500, 0]), np.array([ 500,  500, 0]), np.array([ 500, -500, 0])],
-                             [np.array([-300, -300, 0]), np.array([-300, -200, 0]), np.array([-200, -200, 0]), np.array([-200, -300, 0])],
-                             [np.array([ 300,  300, 0]), np.array([ 300,  200, 0]), np.array([ 200,  200, 0]), np.array([ 200,  300, 0])]]
+        objectsDescriptor = np.array([[[-500, -500, 0], [-500,  500, 0], [ 500,  500, 0], [ 500, -500, 0]],
+                                      [[-300, -300, 0], [-300, -200, 0], [-200, -200, 0], [-200, -300, 0]],
+                                      [[ 300,  300, 0], [ 300,  200, 0], [ 200,  200, 0], [ 200,  300, 0]]])
         return objectsDescriptor, generateSceneByDescriptor(objectsDescriptor, objs, len(objs))
     def getSpawnPoint(self):
         return np.array([0, 0, 0])
@@ -77,7 +77,7 @@ class TwoBoxesSceneGenerator(SceneGenerator):
 
 class SimpleSceneGenerator(SceneGenerator):
     def generate(self, objs):
-        objectsDescriptor = [[np.array([-500, -500, 0]), np.array([-500,  500, 0]), np.array([ 500,  500, 0]), np.array([ 500, -500, 0])]]
+        objectsDescriptor = np.array([[[-500, -500, 0], [-500,  500, 0], [ 500,  500, 0], [ 500, -500, 0]]])
         return objectsDescriptor, generateSceneByDescriptor(objectsDescriptor, objs, len(objs))
     def getSpawnPoint(self):
         return np.array([0, 0, 0])
@@ -86,9 +86,9 @@ class SimpleSceneGenerator(SceneGenerator):
 
 class ZigZagSceneGenerator(SceneGenerator):
     def generate(self, objs):
-        objectsDescriptor = [[np.array([-700,  500, 0]), np.array([-300,  500, 0]), np.array([ 300, -100, 0]), np.array([ 300, 500, 0]),
-                              np.array([ 700,  500, 0]), np.array([ 700, -500, 0]), np.array([ 300, -500, 0]), np.array([-300, 100, 0]),
-                              np.array([-300, -500, 0]), np.array([-700, -500, 0])]]
+        objectsDescriptor = np.array([[[-700,  500, 0], [-300,  500, 0], [ 300, -100, 0], [ 300, 500, 0],
+                                       [ 700,  500, 0], [ 700, -500, 0], [ 300, -500, 0], [-300, 100, 0],
+                                       [-300, -500, 0], [-700, -500, 0]]])
         return objectsDescriptor, generateSceneByDescriptor(objectsDescriptor, objs, len(objs))
     def getSpawnPoint(self):
         return np.array([-500, 0, 0])
