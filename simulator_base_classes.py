@@ -3,7 +3,7 @@ from simulator_base_constants import *
 import simulator_base_functions
 from simulator_base_functions import *
 
-FPS = 50
+FPS = 200
 SForFrame = 1 / FPS
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)

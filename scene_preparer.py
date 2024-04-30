@@ -23,7 +23,7 @@ def drawSceneWalls(sc, O, objectsDescriptor, color = WALLCOLOR):
         for l in range(0, len(angles)):
             pntL = angles[l] * scale + O
             pntR = angles[0 if l + 1 == len(angles) else l + 1] * scale + O
-            pygame.draw.line(sc, color, (pntL[0], pntL[1]), (pntR[0], pntR[1]), 10)            
+            pygame.draw.line(sc, color, tuple(pntL[:2]), tuple(pntR[:2]), 10)            
 
 def generateSceneByDescriptor(objectsDescriptor, objs, rCnt):
     correctedAnchorCount = 0
@@ -98,8 +98,7 @@ class ZigZagSceneGenerator(SceneGenerator):
 class Maze1SceneGenerator(SceneGenerator):
     def generate(self, objs):
         objectsDescriptor = [np.array([[-672, -672, 0], [-116, -684, 0], [-114, -216, 0], [-64, -216, 0], [-68, -680, 0], [658, -690, 0], [654, -292, 0], [134, -286, 0], [134, -228, 0], [950, -242, 0], [940, -306, 0], [714, -302, 0], [706, -688, 0], [2070, -690, 0], [2070, 672, 0], [1560, 644, 0], [1522, -330, 0], [1446, -324, 0], [1466, 638, 0], [224, 642, 0], [198, 24, 0], [140, 28, 0], [126, 628, 0], [-656, 648, 0], [-664, 126, 0], [-48, 112, 0], [-54, 54, 0], [-674, 52, 0]]),
- np.array([[498, 26, 0], [558, -78, 0], [1300, 374, 0], [1210, 460, 0], [894, 274, 0], [730, 434, 0], [610, 356, 0], [764, 204, 0]]),
- np.array([[1130, 20, 0], [1208, 16, 0], [1234, -456, 0], [1784, -522, 0], [1790, 328, 0], [1844, 326, 0], [1850, -578, 0], [908, -552, 0], [904, -472, 0], [1150, -466, 0]])]
+ np.array([[526, 36, 0], [526, 144, 0], [1144, 130, 0], [1130, 38, 0]])]
         return objectsDescriptor, generateSceneByDescriptor(objectsDescriptor, objs, len(objs))
     def getSpawnPoint(self):
         return np.array([-400, -300, 0])

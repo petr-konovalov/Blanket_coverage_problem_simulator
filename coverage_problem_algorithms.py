@@ -7,7 +7,7 @@ from math import pi, sin, cos
 class Algorithm:
     def algorithmSetup(self, rCnt):
         pass
-    def calcSpeed(self, objs, agentId, rCnt):
+    def calcSpeed(self, visibleObjects):
         pass
     def getName(self):
         pass
@@ -215,38 +215,22 @@ class CSAAlgorithm(Algorithm):
 
 class SAAlgorithm(Algorithm):
     def __init__(self, sectorCount = 6):
-        self.sectorCount = sectorCount
+        self.secCnt = sectorCount
         
     def getName(self):
         return 'SA'
         
-    def calcSpeed(self, objs, agentId, rCnt):
-        sumInSector = np.zeros([self.sectorCount, 3])
-        cntInSector = np.zeros([self.sectorCount, 1])
-        sectorDir = [np.array([cos(k*pi/self.sectorCount*2)+cos((k+1)*pi/self.sectorCount*2),
-                               sin(k*pi/self.sectorCount*2)+sin((k+1)*pi/self.sectorCount*2), 0]) for k in range(0, self.sectorCount)]
-        sectorDir = [s/la.norm(s) for s in sectorDir]
-        nearestInSector = np.array([s * RVis for s in sectorDir])
-        for k in range(0, rCnt + anchorCnt):
-            if k != agentId and la.norm(objs[k].getPos() - objs[agentId].getPos()) < RVis:
-                ang = mh.atan2(mul(np.array([1, 0]), objs[k].getPos()-objs[agentId].getPos()), dot(np.array([1, 0]), objs[k].getPos()-objs[agentId].getPos()))
-                angId = int(ang / pi * self.sectorCount*0.5+self.sectorCount)%self.sectorCount
-                sumInSector[angId] += objs[k].getPos()-objs[agentId].getPos()
-                cntInSector[angId] += 1
-                if la.norm(nearestInSector[angId, :] - np.array([0, 0, 0])) == 0 or la.norm(nearestInSector[angId, :]) > la.norm(objs[k].getPos()-objs[agentId].getPos()):
-                    nearestInSector[angId, :] = objs[k].getPos()-objs[agentId].getPos()
-        nSum = np.array([0.0, 0.0, 0.0])
-        nRevSum = np.array([0.0, 0.0, 0.0])
-        nCnt = 0
-        for k in range(0, self.sectorCount):
-            if la.norm(nearestInSector[k]) > 0:
-                nSum += la.norm(nearestInSector[k])
-                nCnt += 1
-        for k in range(0, self.sectorCount):
-            if la.norm(nearestInSector[k]) > 0:                            
-                nRevSum += -nearestInSector[k] / la.norm(nearestInSector[k]) * (nSum/nCnt - la.norm(nearestInSector[k]))/(nSum/nCnt)
-                
-        newV = nRevSum * 12
+    def calcSpeed(self, visibleObjects):
+        sectorDir = [normir(np.array([cos(k*pi/self.secCnt*2)+cos((k+1)*pi/self.secCnt*2),
+                                      sin(k*pi/self.secCnt*2)+sin((k+1)*pi/self.secCnt*2), 0])) for k in range(0, self.secCnt)]
+        secNearest = np.array([s * RVis for s in sectorDir])
+        for v in visibleObjects:
+            ang = mh.atan2(mul(np.array([1, 0]), v), dot(np.array([1, 0]), v))
+            angId = int(ang / pi * self.secCnt*0.5+self.secCnt)%self.secCnt
+            if la.norm(secNearest[angId, :]) > la.norm(v):
+                secNearest[angId, :] = v
+        meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
+        newV = 12 * sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest])
         absV = la.norm(newV)
         if absV > maxV:
             newV = newV / absV * maxV

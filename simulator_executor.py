@@ -59,7 +59,7 @@ def runSimulator(sceneGenerator, algorithm, metricsWriter, width = DEFAULT_WIDTH
             sumV = 0
             for j in range(0, rCnt):
                 if objs[j].isLive():
-                    newV = algorithm.calcSpeed(objs, j, rCnt)
+                    newV = algorithm.calcSpeed(measureVisibleObjects(objs, objectsDescriptor, j, rCnt, RVis))
                     objs[j].setV(newV)                            
                     sumV += la.norm(newV)
                     energy += la.norm(newV) / 100

@@ -51,3 +51,58 @@ def rotateVec(U, ang):
     sa = mh.sin(ang)
     ca = mh.cos(ang)
     return [U[0]*ca-U[1]*sa, U[0]*sa+U[1]*ca]
+
+def trunc(arg, left, right):
+    if arg < left:
+        return left
+    elif arg > right:
+        return right
+    else:
+        return arg
+
+def normir(v):
+    vnorm = la.norm(v)
+    if vnorm == 0:
+        return v
+    else:
+        return v / vnorm
+
+def getPointToSegmentProjection(pnt, A, B):
+    v = B - A
+    nv2 = dot(v, v)
+    if nv2 == 0:
+        return A
+    return A + v * trunc(dot(pnt - A, v) / nv2, 0, 1)
+
+def inRange(arg, left, right):
+    if left > right:
+        left, right = right, left
+    return left <= arg and arg <= right
+
+def pntInRect(pnt, A, B):
+    return inRange(pnt[0], A[0], B[0]) and inRange(pnt[1], A[1], B[1])
+
+def measureVisibleObjects(objs, objectsDescriptor, agentId, rCnt, RVis, generationCount = DEFAULT_ANCHOR_GENERATION_COUNT):
+    res = []
+    for i, agent in enumerate(objs):
+        p = agent.getPos() - objs[agentId].getPos()
+        if i != agentId and la.norm(p) <= RVis:
+            res.append(p)
+    for a in objectsDescriptor:
+        for a1, a2 in zip(a, np.roll(a, len(a[0]))):
+            proj = getPointToSegmentProjection(objs[agentId].getPos(), a1, a2) - objs[agentId].getPos()
+            nProj = la.norm(proj)
+            if nProj <= RVis:
+                v = normir(a2 - a1) * RVis / generationCount
+                for p in [proj + t * v for t in range(-generationCount, generationCount + 1)]:
+                    if pntInRect(p + objs[agentId].getPos(), a1, a2) and la.norm(p) <= RVis:
+                        res.append(p)
+    return res
+
+def measureVisibleObjectsSimple(objs, agentId, rCnt, RVis):
+    res = []
+    for i, agent in enumerate(objs):
+        p = agent.getPos() - objs[agentId].getPos()
+        if i != agentId and la.norm(p) <= RVis:
+            res.append(p)
+    return res
