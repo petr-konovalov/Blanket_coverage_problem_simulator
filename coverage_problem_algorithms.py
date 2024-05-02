@@ -5,8 +5,6 @@ from simulator_base_functions import *
 from math import pi, sin, cos
 
 class Algorithm:
-    def algorithmSetup(self, rCnt):
-        pass
     def calcSpeed(self, visibleObjects):
         pass
     def getName(self):
@@ -154,7 +152,7 @@ class CSAAlgorithm(Algorithm):
             if nvec > 0: 
                 cD = mul(secDir[angId], vec)
                 rD = RVis - nvec
-                if rD < abs(cD):
+                if max(rD, 0.01) < abs(cD):
                     vec = vec + np.array([secDir[angId][1], 
                                           -secDir[angId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
                     vec = vec / la.norm(vec) * nvec
@@ -167,7 +165,7 @@ class CSAAlgorithm(Algorithm):
             if nLeftProj > 0:
                 cD = mul(secDir[angLeftId], leftProj)
                 rD = RVis - nLeftProj
-                if rD < abs(cD):
+                if max(rD, 0.01) < abs(cD):
                     leftProj = leftProj + np.array([secDir[angLeftId][1], 
                                                     -secDir[angLeftId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
                     leftProj = leftProj / la.norm(leftProj) * nLeftProj
@@ -180,7 +178,7 @@ class CSAAlgorithm(Algorithm):
             if nRightProj > 0:
                 cD = mul(secDir[angRightId], rightProj)
                 rD = RVis - nRightProj
-                if rD < abs(cD):
+                if max(rD, 0.01) < abs(cD):
                     rightProj = rightProj + np.array([secDir[angRightId][1], 
                                                       -secDir[angRightId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
                     rightProj = rightProj / la.norm(rightProj) * nRightProj
@@ -191,8 +189,8 @@ class CSAAlgorithm(Algorithm):
                 secNearest[angRightId, :] += rightProj * w
         z = wSecSum > 0
         secNearest[z] = (secNearest[z].T / wSecSum[z]).T
-        meanNearest = sum([la.norm(S) for S in secNearest if la.norm(S) > 0]) / self.secCnt
-        newV = self.speedCoef * sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest])
+        meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
+        newV = self.speedCoef * sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest  if la.norm(S) > 0])
         absV = la.norm(newV)
         if absV > maxV:
             newV = newV / absV * maxV
@@ -222,60 +220,52 @@ class SAAlgorithm(Algorithm):
         return newV
 
 class DSSAAlgorithm(Algorithm):
-    def __init__(self, A):
+    def __init__(self, rCnt, A):
         self.e = 0.26*100/50
         self.Olim = 10
         self.Slim = 10
+        self.state = 'ordinary'
+        self.Ocnt = 0
+        self.Scnt = 0
+        self.prevSpeed = np.zeros(3)
         self.A = A
-        
+        self.mu = rCnt * 3.14 * RVis ** 2 / A
+    
     def getName(self):
         return 'DSSA'
-        
-    def algorithmSetup(self, rCnt):
-        self.Ocnt = np.zeros(rCnt)
-        self.Scnt = np.zeros(rCnt)
-        self.prevPos = np.zeros([rCnt, 3])
-        self.mu = rCnt * 3.14 * (RVis) ** 2 / self.A
 
-    def partialForce(self, C, D, vec, dst):
-        return -C * (D / (self.mu ** 2)) * (RVis - dst) * vec / dst
+    def partialForce(self, D, vec, dst):
+        return -(D / (self.mu ** 2)) * (RVis - dst) * vec / dst
         
-    def calcSpeed(self, objs, agentId, rCnt):
+    def calcSpeed(self, visibleObjects):
         newV = np.array([0.0, 0.0, 0.0])
         D = 0
-        if objs[agentId].getState() == 'ordinary':
-            for k in range(0, rCnt):
-                dst = la.norm(objs[k].getPos() - objs[agentId].getPos())
-                if dst < RVis:
-                    D += 1
-            for k in range(0, rCnt + anchorCnt):
-                vec = (objs[k].getPos() - objs[agentId].getPos())
-                dst = la.norm(vec)
-                if dst > 0 and dst < RVis:
-                    newV += self.partialForce(5 if k >= rCnt else 1, D, vec, dst) 
-            if la.norm(objs[agentId].getPos() - self.prevPos[agentId]) < self.e:
-                self.Scnt[agentId] += 1
-            if self.Scnt[agentId] >= self.Slim:
-                newV = np.array([0.0, 0.0, 0.0])
-                objs[agentId].setState('stop')                                                
-            nextPos = objs[agentId].getPos() + newV
-            if la.norm(nextPos - self.prevPos[agentId]) < self.e:
-                self.Ocnt[agentId] += 1
-            if self.Ocnt[agentId] >= self.Olim:
-                newV = newV / 2
-                objs[agentId].setState('stop')
-            self.prevPos[agentId] = objs[agentId].getPos()
+        if self.state == 'ordinary':
+            D = len(visibleObjects)
+            for vec in visibleObjects:
+                newV += self.partialForce(D, vec, la.norm(vec)) 
             absV = la.norm(newV)
             if absV > maxV:
                 newV = newV / absV * maxV
+            if la.norm(self.prevSpeed) < self.e:
+                self.Scnt += 1
+            if self.Scnt >= self.Slim:
+                newV = np.zeros(3)
+                self.state = 'stop'
+            if la.norm(newV + self.prevSpeed) < self.e:
+                self.Ocnt += 1
+            if self.Ocnt >= self.Olim:
+                newV = newV / 2
+                self.state = 'stop'
+            self.prevSpeed = newV
         return newV
 
 class SODAAlgorithm(DSSAAlgorithm):
     def getName(self):
         return 'SODA'
     
-    def partialForce(self, C, D, vec, dst):
-        return -C * (D / (self.mu * (D if D > self.mu else self.mu))) * (RVis - dst) * vec / dst
+    def partialForce(self, D, vec, dst):
+        return -(D / (self.mu * (D if D > self.mu else self.mu))) * (RVis - dst) * vec / dst
 
 class SSNDAlgorithm(DSSAAlgorithm):
     def __init__(self, A, alpha = 1):
@@ -343,4 +333,3 @@ class SSNDAlgorithm(DSSAAlgorithm):
         if absV > maxV:
             newV = newV / absV * maxV
         return newV
-        

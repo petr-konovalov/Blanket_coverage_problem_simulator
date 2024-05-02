@@ -2,6 +2,7 @@ import simulator_base_constants
 from simulator_base_constants import *
 import simulator_base_functions
 from simulator_base_functions import *
+from coverage_problem_algorithms import SAAlgorithm as SA
 
 FPS = 200
 SForFrame = 1 / FPS
@@ -51,27 +52,16 @@ class GeomObj(ActiveObj):
         return self.getYDiff(oPos) > 0
     
 class Robot(GeomObj):
-    def __init__(self, pos, V = np.array([0, 0, 0]), Rvis = 10, r = 12, color = ROBOTCOLOR, Dir = np.array([1, 0]), maxAngVel = 14, maxAcc = 0.08, maxAx = 0.05, maxAy = 0.05, Vm = 0.5, state = 'ordinary'): #maxAngVel = 14, maxAcc = 0.08
+    def __init__(self, pos, V = np.zeros(3), r = 12, color = ROBOTCOLOR, Dir = np.array([1, 0]), Vm = 0.5, state = 'ordinary', algorithm = SA()):
         self._dir = Dir
         self._live = True
         self._pos = pos
-        self._maxAngVel = maxAngVel / 180 * mh.pi
-        self._maxAcc = maxAcc
         self._V = V
         self._Vm = Vm
-        self._maxAx = maxAx
-        self._maxAy = maxAy
-#         if la.norm(V) > 1e-2: #Костыль
-#             self._V = V
-#         else:
-#             self._V = Dir
         self._r = r
         self._color = color
         self._state = state
-    def setState(self, newState):
-        self._state = newState
-    def getState(self):
-        return self._state
+        self._algorithm = algorithm
     def getColor(self):
         return self._color
     def setColor(self, color):
@@ -122,25 +112,11 @@ class Robot(GeomObj):
         return self.getKDiff(oPos, k) < 0
     def inRank(self, oPos, buildWidth):
         return abs(self.getXDiff(oPos)) < buildWidth
+    def calcSpeed(self, visibleObjects):
+        self._V = self._algorithm.calcSpeed(visibleObjects)
+        return self._V
     def setV(self, V):
         self._V = V
-#         disturb = 0.15
-# #         A = calcA(objs, np.array([min(self._maxAx, abs(V[0]-self._V[0])), min(self._maxAy, abs(V[1]-self._V[1]))]), V, self._V)
-#         A = calcA(np.array([self._maxAx, self._maxAy]), V, self._V)
-#         lV = la.norm(self._V)
-#         th = mh.atan2(self._V[1], self._V[0])
-#         if self._V[0] >= self._Vm:
-#             uv = sat(self._maxAcc, A[0]*mh.cos(th)+A[1]*mh.sin(th))
-#             uth = sat(self._maxAngVel, (A[1]*mh.cos(th)-A[0]*mh.sin(th))/V[0])
-#         else:
-# #             uv = sat(abs(V[0]-self._V[0]), mh.copysign(self._maxAcc, V[0]-self._V[0]))
-# #             uth = sat(abs(self._V[1]), mh.copysign(self._maxAngVel, -self._V[1]))
-#             uv = mh.copysign(self._maxAcc, V[0]-self._V[0])
-#             uth = mh.copysign(self._maxAngVel, -self._V[1])
-#         uvdis = rdm.uniform(-self._maxAcc*disturb/2, self._maxAcc*disturb/2)
-#         uthdis = rdm.uniform(-self._maxAngVel*disturb/2, self._maxAngVel*disturb/2)
-#         self._V = (lV+uv+uvdis)*np.array([mh.cos(th+uth+uthdis), mh.sin(th+uth+uthdis)])
-
     def getV(self):
         return self._V
     def getY(self, X):
@@ -149,32 +125,16 @@ class Robot(GeomObj):
         return self.getDist(RPos) < RVis
     def isWall(self):
         return False
-    
     def draw(self, sc, O):
-        #DispPos = self._pos*scale + O
-        #pygame.draw.circle(sc, self._color, (int(DispPos[1]), int(DispPos[2])), int(self._r*scale))
         DispPosXY = self._pos*scale + O#Oxy
         pygame.draw.circle(sc, self._color, (int(DispPosXY[0]), int(DispPosXY[1])), int(self._r*scale))
         if self._state != 'wall':
-        #if self._state == 'Red':
             pygame.draw.circle(sc, self._color, (int(DispPosXY[0]), int(DispPosXY[1])), int(RVis*scale), width = 1)
-#         DispPosYZ = self._pos*scale + Oyz
-#         pygame.draw.circle(sc, self._color, (int(DispPosYZ[1]), int(DispPosYZ[2])), int(self._r*scale))
-#         DispPosXZ = self._pos*scale + Oxz
-#         pygame.draw.circle(sc, self._color, (int(DispPosXZ[0]), int(DispPosXZ[2])), int(self._r*scale))
-        
     def hide(self, sc, O):
-#         DispPos = self._pos*scale + O
-#         pygame.draw.circle(sc, BGCOLOR, (int(DispPos[1]), int(DispPos[2])), int(3+self._r*scale))
         DispPosXY = self._pos*scale + O#Oxy
         pygame.draw.circle(sc, BGCOLOR, (int(DispPosXY[0]), int(DispPosXY[1])), int(3+self._r*scale))
         if self._state != 'wall':
-        #if self._state == 'Red':
             pygame.draw.circle(sc, BGCOLOR, (int(DispPosXY[0]), int(DispPosXY[1])), int(RVis*scale), width = 3)
-#         DispPosYZ = self._pos*scale + Oyz
-#         pygame.draw.circle(sc, BGCOLOR, (int(DispPosYZ[1]), int(DispPosYZ[2])), int(3+self._r*scale))
-#         DispPosXZ = self._pos*scale + Oxz
-#         pygame.draw.circle(sc, BGCOLOR, (int(DispPosXZ[0]), int(DispPosXZ[2])), int(3+self._r*scale))
     def action(self):
         self._pos = self._pos + self._V
     
