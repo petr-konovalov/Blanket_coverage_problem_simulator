@@ -16,7 +16,7 @@ DEFAULT_ANCHOR_GENERATION_COUNT = 10
 #задаются константы
 anchorCnt = 1
 eC = 100
-rCnts = [200]+[50]*eC+[45]*eC+[40]*eC+[35]*eC+[30]*eC+[25]*eC+[20]*eC+[15]*eC+[10]*eC #robots count
+rCnts = [50]+[50]*eC+[45]*eC+[40]*eC+[35]*eC+[30]*eC+[25]*eC+[20]*eC+[15]*eC+[10]*eC #robots count
 RVis = 200 #vision radius
 maxV = 8 #maximum speed
 

@@ -123,114 +123,99 @@ class VFASFAlgorithm(Algorithm):
         return self.newV[agentId]
 
 class CSAAlgorithm(Algorithm):
-    def __init__(self, sectorCount = 6):
-        self.sectorCount = sectorCount
+    def __init__(self, sectorCount = 6, speedCoef = 20):
+        self.secCnt = sectorCount
+        self.speedCoef = speedCoef
     
     def getName(self):
         return 'CSA'
         
-    def calcSpeed(self, objs, agentId, rCnt):
-        self.sumInSector = np.zeros([self.sectorCount, 3])
-        self.cntInSector = np.zeros([self.sectorCount, 1])
-        self.wSumInSector = np.zeros([self.sectorCount])
-        self.sectorDir = [np.array([cos(k*pi/self.sectorCount*2)+cos((k+1)*pi/self.sectorCount*2),
-                                    sin(k*pi/self.sectorCount*2)+sin((k+1)*pi/self.sectorCount*2), 0]) for k in range(0, self.sectorCount)]
-        self.sectorDir = [s/la.norm(s) for s in self.sectorDir]
-        self.nearestInSector = np.array([s * RVis for s in self.sectorDir])
-        for k in range(0, rCnt + anchorCnt):
-            vec = objs[k].getPos() - objs[agentId].getPos()
+    def calcSpeed(self, visibleObjects):
+        wSecSum = np.zeros([self.secCnt])
+        secDir = [normir(np.array([cos(k*pi/self.secCnt*2)+cos((k+1)*pi/self.secCnt*2),
+                                      sin(k*pi/self.secCnt*2)+sin((k+1)*pi/self.secCnt*2), 0])) for k in range(0, self.secCnt)]
+        secNearest = np.array([s * RVis for s in secDir])
+        for vec in visibleObjects:
             nvec = la.norm(vec)
-            if k != agentId and nvec < RVis:
-                ang = mh.atan2(mul(np.array([1, 0]), vec), dot(np.array([1, 0]), vec))
-                angId = int(ang / pi * self.sectorCount*0.5+self.sectorCount)%self.sectorCount
-                angLeftId = (angId + self.sectorCount - 1) % self.sectorCount
-                angRightId = (angId + 1) % self.sectorCount
-                angLeft = angId * 2 * pi / self.sectorCount
-                angRight = angLeft + 2 * pi / self.sectorCount
-                vecLeft = np.array([cos(angLeft), sin(angLeft), 0])
-                vecRight = np.array([cos(angRight), sin(angRight), 0])
-                dL = abs(mul(vecLeft, vec))
-                dR = abs(mul(vecRight, vec))
-                leftProj = (self.sectorDir[angLeftId] * RVis * dL + vecLeft * nvec * dR) / (dR + dL)
-                rightProj = (self.sectorDir[angRightId] * RVis * dR + vecRight * nvec * dL) / (dR + dL)
-                leftProj = leftProj / la.norm(leftProj) * max(nvec, la.norm(leftProj))
-                rightProj = rightProj / la.norm(rightProj) * max(nvec, la.norm(rightProj))
-                self.sumInSector[angId] += vec
-                self.cntInSector[angId] += 1    
-                if nvec > 0: 
-                    cD = mul(self.sectorDir[angId], vec)
-                    rD = RVis - nvec
-                    if rD < abs(cD):
-                        vec = vec + np.array([self.sectorDir[angId][1], 
-                                              -self.sectorDir[angId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
-                        vec = vec / la.norm(vec) * nvec
-                    if self.wSumInSector[angId] == 0:
-                        self.nearestInSector[angId, :] = np.zeros(3)
-                    w = (RVis - nvec) ** 2
-                    self.wSumInSector[angId] += w 
-                    self.nearestInSector[angId, :] += vec * w
-                nLeftProj = la.norm(leftProj)
-                if nLeftProj > 0:
-                    cD = mul(self.sectorDir[angLeftId], leftProj)
-                    rD = RVis - nLeftProj
-                    if rD < abs(cD):
-                        leftProj = leftProj + np.array([self.sectorDir[angLeftId][1], 
-                                                        -self.sectorDir[angLeftId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
-                        leftProj = leftProj / la.norm(leftProj) * nLeftProj
-                    if self.wSumInSector[angLeftId] == 0:
-                        self.nearestInSector[angLeftId, :] = np.zeros(3)
-                    w = (RVis - la.norm(leftProj)) ** 2
-                    self.wSumInSector[angLeftId] += w
-                    self.nearestInSector[angLeftId, :] += leftProj * w
-                nRightProj = la.norm(rightProj)
-                if nRightProj > 0:
-                    cD = mul(self.sectorDir[angRightId], rightProj)
-                    rD = RVis - nRightProj
-                    if rD < abs(cD):
-                        rightProj = rightProj + np.array([self.sectorDir[angRightId][1], 
-                                                          -self.sectorDir[angRightId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
-                        rightProj = rightProj / la.norm(rightProj) * nRightProj
-                    if self.wSumInSector[angRightId] == 0:
-                        self.nearestInSector[angRightId, :] = np.zeros(3)
-                    w = (RVis - la.norm(rightProj)) ** 2
-                    self.wSumInSector[angRightId] += w
-                    self.nearestInSector[angRightId, :] += rightProj * w
-        nSum = np.array([0.0, 0.0, 0.0])
-        nRevSum = np.array([0.0, 0.0, 0.0])
-        nCnt = 0
-        for k in range(0, self.sectorCount):
-            if la.norm(self.nearestInSector[k]) > 0:
-                if self.wSumInSector[k] > 0:
-                    self.nearestInSector[k] /= self.wSumInSector[k]
-                nSum += la.norm(self.nearestInSector[k])
-                nCnt += 1
-        for k in range(0, self.sectorCount):
-            if la.norm(self.nearestInSector[k]) > 0:                            
-                nRevSum += -self.nearestInSector[k] / la.norm(self.nearestInSector[k]) * (nSum/nCnt - la.norm(self.nearestInSector[k]))/(nSum/nCnt)
-        newV = nRevSum * 20 
+            ang = mh.atan2(mul(np.array([1, 0]), vec), dot(np.array([1, 0]), vec))
+            angId = int(ang / pi * self.secCnt*0.5+self.secCnt)%self.secCnt
+            angLeftId = (angId + self.secCnt - 1) % self.secCnt
+            angRightId = (angId + 1) % self.secCnt
+            angLeft = angId * 2 * pi / self.secCnt
+            angRight = angLeft + 2 * pi / self.secCnt
+            vecLeft = np.array([cos(angLeft), sin(angLeft), 0])
+            vecRight = np.array([cos(angRight), sin(angRight), 0])
+            dL = abs(mul(vecLeft, vec))
+            dR = abs(mul(vecRight, vec))
+            leftProj = (secDir[angLeftId] * RVis * dL + vecLeft * nvec * dR) / (dR + dL)
+            rightProj = (secDir[angRightId] * RVis * dR + vecRight * nvec * dL) / (dR + dL)
+            leftProj = normir(leftProj) * max(nvec, min(la.norm(leftProj), RVis))
+            rightProj = normir(rightProj) * max(nvec, min(la.norm(rightProj), RVis))
+            if nvec > 0: 
+                cD = mul(secDir[angId], vec)
+                rD = RVis - nvec
+                if rD < abs(cD):
+                    vec = vec + np.array([secDir[angId][1], 
+                                          -secDir[angId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
+                    vec = vec / la.norm(vec) * nvec
+                if wSecSum[angId] == 0:
+                    secNearest[angId, :] = np.zeros(3)
+                w = (RVis - nvec) ** 2
+                wSecSum[angId] += w 
+                secNearest[angId, :] += vec * w
+            nLeftProj = la.norm(leftProj)
+            if nLeftProj > 0:
+                cD = mul(secDir[angLeftId], leftProj)
+                rD = RVis - nLeftProj
+                if rD < abs(cD):
+                    leftProj = leftProj + np.array([secDir[angLeftId][1], 
+                                                    -secDir[angLeftId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
+                    leftProj = leftProj / la.norm(leftProj) * nLeftProj
+                if wSecSum[angLeftId] == 0:
+                    secNearest[angLeftId, :] = np.zeros(3)
+                w = (RVis - la.norm(leftProj)) ** 2
+                wSecSum[angLeftId] += w
+                secNearest[angLeftId, :] += leftProj * w
+            nRightProj = la.norm(rightProj)
+            if nRightProj > 0:
+                cD = mul(secDir[angRightId], rightProj)
+                rD = RVis - nRightProj
+                if rD < abs(cD):
+                    rightProj = rightProj + np.array([secDir[angRightId][1], 
+                                                      -secDir[angRightId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
+                    rightProj = rightProj / la.norm(rightProj) * nRightProj
+                if wSecSum[angRightId] == 0:
+                    secNearest[angRightId, :] = np.zeros(3)
+                w = (RVis - la.norm(rightProj)) ** 2
+                wSecSum[angRightId] += w
+                secNearest[angRightId, :] += rightProj * w
+        z = wSecSum > 0
+        secNearest[z] = (secNearest[z].T / wSecSum[z]).T
+        meanNearest = sum([la.norm(S) for S in secNearest if la.norm(S) > 0]) / self.secCnt
+        newV = self.speedCoef * sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest])
         absV = la.norm(newV)
         if absV > maxV:
             newV = newV / absV * maxV
         return newV
 
 class SAAlgorithm(Algorithm):
-    def __init__(self, sectorCount = 6):
+    def __init__(self, sectorCount = 6, speedCoef = 12):
         self.secCnt = sectorCount
+        self.speedCoef = 12
         
     def getName(self):
         return 'SA'
         
     def calcSpeed(self, visibleObjects):
-        sectorDir = [normir(np.array([cos(k*pi/self.secCnt*2)+cos((k+1)*pi/self.secCnt*2),
-                                      sin(k*pi/self.secCnt*2)+sin((k+1)*pi/self.secCnt*2), 0])) for k in range(0, self.secCnt)]
-        secNearest = np.array([s * RVis for s in sectorDir])
+        secNearest = np.array([RVis * normir(np.array([cos(k*pi/self.secCnt*2)+cos((k+1)*pi/self.secCnt*2),
+                                      sin(k*pi/self.secCnt*2)+sin((k+1)*pi/self.secCnt*2), 0])) for k in range(0, self.secCnt)])
         for v in visibleObjects:
             ang = mh.atan2(mul(np.array([1, 0]), v), dot(np.array([1, 0]), v))
             angId = int(ang / pi * self.secCnt*0.5+self.secCnt)%self.secCnt
             if la.norm(secNearest[angId, :]) > la.norm(v):
                 secNearest[angId, :] = v
         meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
-        newV = 12 * sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest])
+        newV = self.speedCoef * sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest])
         absV = la.norm(newV)
         if absV > maxV:
             newV = newV / absV * maxV

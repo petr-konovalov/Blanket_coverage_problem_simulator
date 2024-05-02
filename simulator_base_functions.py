@@ -86,16 +86,16 @@ def measureVisibleObjects(objs, objectsDescriptor, agentId, rCnt, RVis, generati
     res = []
     for i, agent in enumerate(objs):
         p = agent.getPos() - objs[agentId].getPos()
-        if i != agentId and la.norm(p) <= RVis:
+        if i != agentId and la.norm(p) < RVis:
             res.append(p)
     for a in objectsDescriptor:
         for a1, a2 in zip(a, np.roll(a, len(a[0]))):
             proj = getPointToSegmentProjection(objs[agentId].getPos(), a1, a2) - objs[agentId].getPos()
             nProj = la.norm(proj)
-            if nProj <= RVis:
+            if nProj < RVis:
                 v = normir(a2 - a1) * RVis / generationCount
                 for p in [proj + t * v for t in range(-generationCount, generationCount + 1)]:
-                    if pntInRect(p + objs[agentId].getPos(), a1, a2) and la.norm(p) <= RVis:
+                    if pntInRect(p + objs[agentId].getPos(), a1, a2) and la.norm(p) < RVis:
                         res.append(p)
     return res
 
