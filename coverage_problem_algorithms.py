@@ -40,7 +40,11 @@ class DiscreteTimeSpeedConstraintsAlgorithm(Algorithm):
         return speed
     
 class InitialContextRequiredAlgorithm(Algorithm):
-    def setup(objects, agents_count, obstacles):
+    def setup(self, objects, agentsCount, obstacles):
+        pass
+    
+class DynamicContextRequiredAlgorithm(Algorithm):
+    def update(self, objects, agentsCount, selfId):
         pass
     
 class CommunicationRequiredAlgorithm(Algorithm):
@@ -87,47 +91,42 @@ class SWARMAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, CommunicationRequire
                 Fobst /= wallCnt
         return self.applySpeedConstraints(-(self.w1 * (Fsep + Fobst) + self.w2 * Fcoh + self.w3 * Falig))
 
-class VFASFAlgorithm(Algorithm):
+class VFASFAlgorithm(DynamicContextRequiredAlgorithm):
     def __init__(self):
         self.kap = 15/2500
         self.Fcentr = 0.005/2500
         self.gamma = 7.75/50
+        self.speed = np.zeros(3)
 
     def getName(self):
         return 'VFASF'
-
-    def algorithmSetup(self, rCnt):
-        self.newV = np.zeros([rCnt, 3])
         
-    def calcSpeed(self,objs, agentId, rCnt):
-        force = -self.Fcentr * objs[agentId].getPos()
-        D = 0
-        if objs[agentId].getState() == 'ordinary':
-            N = []
-            for k in range(0, rCnt + anchorCnt):
-                vec = (objs[k].getPos() - objs[agentId].getPos())
-                dst = la.norm(vec)
-                if dst > 0 and dst < RVis:
-                    N.append([dst, k])
-            N.sort()
-            for k, n in enumerate(N):
-                check = True
-                vec = objs[n[1]].getPos() - objs[agentId].getPos()
-                dst = la.norm(vec)
-                for p in N[:k]:
-                    if dot(vec, objs[p[1]].getPos() - objs[agentId].getPos())/(dst * la.norm(objs[p[1]].getPos() - objs[agentId].getPos())) >= 0.5:
-                        check = False
-                        break
-                if check:
-                    force += self.kap * (dst - RVis/mh.sqrt(3)) * vec / dst
-        self.newV[agentId] = (self.newV[agentId] + force)/(1 + self.gamma)
-        vnorm = la.norm(self.newV[agentId])
-        if la.norm(self.newV[agentId]) < maxV * 0.01:
-            self.newV[agentId] = np.zeros(3)
-        absV = la.norm(self.newV[agentId])
-        if absV > maxV:
-            self.newV[agentId] = self.newV[agentId] / absV * maxV
-        return self.newV[agentId]
+    def update(self, objects, agentsCount, selfId):
+        self.position = objects[selfId].getPos()
+        
+    def applySpeedConstraints(self, speed):
+        absV = la.norm(speed)
+        if absV < maxV * 0.01:
+            speed = np.zeros(3)
+        elif absV > maxV:
+            speed = speed / absV * maxV
+        return speed
+        
+    def calcSpeed(self, visibleObjects):
+        force = -self.Fcentr * self.position
+        N = [[la.norm(vec), vec] for vec in visibleObjects['Positions']]
+        print(N)
+        N.sort()
+        for k, dst, vec in enumerate(N):
+            check = True
+            for d, v in N[:k]:
+                if dot(vec, v) / (dst * d) >= 0.5:
+                    check = False
+                    break
+            if check:
+                force += self.kap * (dst - RVis/mh.sqrt(3)) * vec / dst
+        self.speed = self.applySpeedConstraints((self.speed + force)/(1 + self.gamma))
+        return self.speed
 
 class CSAAlgorithm(Algorithm):
     def __init__(self, sectorCount = 6, speedCoef = 20):
@@ -229,8 +228,8 @@ class DSSAAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequire
         self.A = A
         self.state = 'ordinary'
         
-    def setup(self, objects, agents_count, obstacles):
-        self.mu = agents_count * 3.14 * RVis ** 2 / self.A
+    def setup(self, objects, agentsCount, obstacles):
+        self.mu = agentsCount * 3.14 * RVis ** 2 / self.A
     
     def getName(self):
         return 'DSSA'
