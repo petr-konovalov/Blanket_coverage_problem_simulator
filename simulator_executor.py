@@ -20,7 +20,7 @@ def initPygame(width, height):
     return sc, clock
 
 def algorithmSetup(algorithm, objs, rCnt, obstacles):
-    if issubclass(type(algorithm), ContextRequiredAlgorithm):
+    if issubclass(type(algorithm), InitialContextRequiredAlgorithm):
         for obj in objs[:rCnt]:
             obj.getAlgorithm().setup(objs, rCnt, obstacles)
 

@@ -22,6 +22,7 @@ class DiscreteTimeSpeedConstraintsAlgorithm(Algorithm):
         self.Slim = Slim
         self.Ocnt = 0
         self.Scnt = 0
+        self.prevSpeed = np.zeros(3)
         
     def applySpeedConstraints(self, speed):
         speed = super().applySpeedConstraints(speed)
@@ -55,7 +56,6 @@ class SWARMAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, CommunicationRequire
         self.w1 = 0.4
         self.w2 = 0.4
         self.w3 = 1 - self.w1 - self.w2
-        self.prevSpeed = np.zeros(3)
         self.state = 'ordinary'
         
     def getResponse(self):
@@ -226,7 +226,6 @@ class SAAlgorithm(Algorithm):
 class DSSAAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequiredAlgorithm):
     def __init__(self, A):
         super().__init__()
-        self.prevSpeed = np.zeros(3)
         self.A = A
         self.state = 'ordinary'
         
