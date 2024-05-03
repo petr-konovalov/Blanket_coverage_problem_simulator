@@ -5,78 +5,87 @@ from simulator_base_functions import *
 from math import pi, sin, cos
 
 class Algorithm:
+    def applySpeedConstraints(self, speed):
+        absV = la.norm(speed)
+        if absV > maxV:
+            return speed / absV * maxV
+        return speed
     def calcSpeed(self, visibleObjects):
         pass
     def getName(self):
         pass
 
-class SWARMAlgorithm(Algorithm):
+class DiscreteTimeSpeedConstraintsAlgorithm(Algorithm):
+    def __init__(self, e = 0.52, Olim = 10, Slim = 10):
+        self.e = e
+        self.Olim = Olim
+        self.Slim = Slim
+        self.Ocnt = 0
+        self.Scnt = 0
+        
+    def applySpeedConstraints(self, speed):
+        speed = super().applySpeedConstraints(speed)
+        if la.norm(self.prevSpeed) < self.e:
+            self.Scnt += 1
+        if self.Scnt >= self.Slim:
+            speed = np.zeros(3)
+            self.state = 'stop'
+        if la.norm(speed + self.prevSpeed) < self.e:
+            self.Ocnt += 1
+        if self.Ocnt >= self.Olim:
+            speed = speed / 2
+            self.state = 'stop'
+        self.prevSpeed = speed
+        return speed
+    
+class InitialContextRequiredAlgorithm(Algorithm):
+    def setup(objects, agents_count, obstacles):
+        pass
+    
+class CommunicationRequiredAlgorithm(Algorithm):
+    def getResponse(self):
+        pass
+    def receiveData(self, availableAgents):
+        self.receivedData = [agent.getResponse() for agent in availableAgents]
+
+class SWARMAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, CommunicationRequiredAlgorithm):
     def __init__(self):
+        super().__init__()
         self.K = (mh.sqrt(3) * RVis * 0.5) ** 3
         self.w1 = 0.4
         self.w2 = 0.4
         self.w3 = 1 - self.w1 - self.w2
-        self.e = 0.26*100/50
-        self.Olim = 10
-        self.Slim = 10
+        self.prevSpeed = np.zeros(3)
+        self.state = 'ordinary'
+        
+    def getResponse(self):
+        return self.prevSpeed
 
     def getName(self):
         return 'SWARM'
-
-    def algorithmSetup(self, rCnt):
-        self.Ocnt = np.zeros(rCnt)
-        self.Scnt = np.zeros(rCnt)
-        self.prevF = np.zeros([rCnt, 3])
-        self.prevPos = np.zeros([rCnt, 3])
     
-    def calcSpeed(self, objs, agentId, rCnt):
-        N = calcN(objs, agentId) #Visible robots set
-        Fsep = np.array([0.0, 0.0, 0.0])
-        Fcoh = np.array([0.0, 0.0, 0.0])
-        Falig = np.array([0.0, 0.0, 0.0])
-        Fobst = np.array([0.0, 0.0, 0.0])
-        cnt = 0
-        if objs[agentId].getState() == 'ordinary':
-            for k in range(0, rCnt):
-                vec = objs[agentId].getPos() - objs[k].getPos()
-                dst = la.norm(vec)
-                if dst > 0 and dst < RVis:
-                    Fsep += self.K * vec / dst ** 3
+    def calcSpeed(self, visibleObjects):
+        Fsep = np.zeros(3)
+        Fcoh = np.zeros(3)
+        Fobst = np.zeros(3)
+        Falig = np.mean(self.receivedData, axis = 0)
+        agentCnt = 0
+        wallCnt = 0
+        if self.state == 'ordinary':
+            for vec, label in zip(visibleObjects['Positions'], visibleObjects['Labels']):
+                if label == 'Agent':
+                    Fsep += self.K * vec / la.norm(vec) ** 3
                     Fcoh += vec
-                    Falig += self.prevF[k]
-                    cnt += 1
-            if cnt > 0:     
-                Fsep /= cnt
-                Fcoh /= cnt
-                Falig /= cnt
-            cnt = 0
-            for k in range(rCnt, rCnt + anchorCnt):
-                vec = objs[agentId].getPos() - objs[k].getPos()
-                dst = la.norm(vec)
-                if dst > 0 and dst < RVis:
-                    Fobst += self.K * vec / dst ** 2
-                    cnt += 1
-            if cnt > 0:
-                Fobst /= cnt
-        force = (self.w1 * (Fsep + Fobst) + self.w2 * Fcoh + self.w3 * Falig)
-        if la.norm(objs[agentId].getPos() - self.prevPos[agentId]) < self.e:
-            self.Scnt[agentId] += 1
-        if self.Scnt[agentId] >= self.Slim:
-            force = np.array([0.0, 0.0, 0.0])
-            objs[agentId].setState('stop')                            
-        nextPos = objs[agentId].getPos() + force
-        if la.norm(nextPos - self.prevPos[agentId]) < self.e:
-            self.Ocnt[agentId] += 1
-        if self.Ocnt[agentId] >= self.Olim:
-            force = force / 2
-            objs[agentId].setState('stop')
-        self.prevPos[agentId] = objs[agentId].getPos()
-        self.prevF[agentId] = force
-        newV = force 
-        absV = la.norm(newV)
-        if absV > maxV:
-            newV = newV / absV * maxV  
-        return newV
+                    agentCnt += 1
+                elif label == 'Wall':
+                    Fobst += self.K * vec / la.norm(vec) ** 2
+                    wallCnt += 1
+            if agentCnt > 0:     
+                Fsep /= agentCnt
+                Fcoh /= agentCnt
+            if wallCnt > 0:
+                Fobst /= wallCnt
+        return self.applySpeedConstraints(-(self.w1 * (Fsep + Fobst) + self.w2 * Fcoh + self.w3 * Falig))
 
 class VFASFAlgorithm(Algorithm):
     def __init__(self):
@@ -133,7 +142,7 @@ class CSAAlgorithm(Algorithm):
         secDir = [normir(np.array([cos(k*pi/self.secCnt*2)+cos((k+1)*pi/self.secCnt*2),
                                       sin(k*pi/self.secCnt*2)+sin((k+1)*pi/self.secCnt*2), 0])) for k in range(0, self.secCnt)]
         secNearest = np.array([s * RVis for s in secDir])
-        for vec in visibleObjects:
+        for vec in visibleObjects['Positions']:
             nvec = la.norm(vec)
             ang = mh.atan2(mul(np.array([1, 0]), vec), dot(np.array([1, 0]), vec))
             angId = int(ang / pi * self.secCnt*0.5+self.secCnt)%self.secCnt
@@ -190,11 +199,8 @@ class CSAAlgorithm(Algorithm):
         z = wSecSum > 0
         secNearest[z] = (secNearest[z].T / wSecSum[z]).T
         meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
-        newV = self.speedCoef * sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest  if la.norm(S) > 0])
-        absV = la.norm(newV)
-        if absV > maxV:
-            newV = newV / absV * maxV
-        return newV
+        return self.applySpeedConstraints(self.speedCoef * 
+            sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest  if la.norm(S) > 0]))
 
 class SAAlgorithm(Algorithm):
     def __init__(self, sectorCount = 6, speedCoef = 12):
@@ -206,59 +212,41 @@ class SAAlgorithm(Algorithm):
         
     def calcSpeed(self, visibleObjects):
         secNearest = np.array([RVis * normir(np.array([cos(k*pi/self.secCnt*2)+cos((k+1)*pi/self.secCnt*2),
-                                      sin(k*pi/self.secCnt*2)+sin((k+1)*pi/self.secCnt*2), 0])) for k in range(0, self.secCnt)])
-        for v in visibleObjects:
+                                                       sin(k*pi/self.secCnt*2)+sin((k+1)*pi/self.secCnt*2), 0])) 
+                               for k in range(0, self.secCnt)])
+        for v in visibleObjects['Positions']:
             ang = mh.atan2(mul(np.array([1, 0]), v), dot(np.array([1, 0]), v))
             angId = int(ang / pi * self.secCnt*0.5+self.secCnt)%self.secCnt
             if la.norm(secNearest[angId, :]) > la.norm(v):
                 secNearest[angId, :] = v
         meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
-        newV = self.speedCoef * sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest])
-        absV = la.norm(newV)
-        if absV > maxV:
-            newV = newV / absV * maxV
-        return newV
+        return self.applySpeedConstraints(self.speedCoef * 
+            sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest]))
 
-class DSSAAlgorithm(Algorithm):
-    def __init__(self, rCnt, A):
-        self.e = 0.26*100/50
-        self.Olim = 10
-        self.Slim = 10
-        self.state = 'ordinary'
-        self.Ocnt = 0
-        self.Scnt = 0
+class DSSAAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequiredAlgorithm):
+    def __init__(self, A):
+        super().__init__()
         self.prevSpeed = np.zeros(3)
         self.A = A
-        self.mu = rCnt * 3.14 * RVis ** 2 / A
+        self.state = 'ordinary'
+        
+    def setup(self, objects, agents_count, obstacles):
+        self.mu = agents_count * 3.14 * RVis ** 2 / self.A
     
     def getName(self):
         return 'DSSA'
 
     def partialForce(self, D, vec, dst):
         return -(D / (self.mu ** 2)) * (RVis - dst) * vec / dst
-        
+            
     def calcSpeed(self, visibleObjects):
         newV = np.array([0.0, 0.0, 0.0])
         D = 0
         if self.state == 'ordinary':
-            D = len(visibleObjects)
-            for vec in visibleObjects:
+            D = len(visibleObjects['Positions'])
+            for vec in visibleObjects['Positions']:
                 newV += self.partialForce(D, vec, la.norm(vec)) 
-            absV = la.norm(newV)
-            if absV > maxV:
-                newV = newV / absV * maxV
-            if la.norm(self.prevSpeed) < self.e:
-                self.Scnt += 1
-            if self.Scnt >= self.Slim:
-                newV = np.zeros(3)
-                self.state = 'stop'
-            if la.norm(newV + self.prevSpeed) < self.e:
-                self.Ocnt += 1
-            if self.Ocnt >= self.Olim:
-                newV = newV / 2
-                self.state = 'stop'
-            self.prevSpeed = newV
-        return newV
+        return self.applySpeedConstraints(newV)
 
 class SODAAlgorithm(DSSAAlgorithm):
     def getName(self):

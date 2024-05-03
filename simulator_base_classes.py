@@ -62,6 +62,8 @@ class Robot(GeomObj):
         self._color = color
         self._state = state
         self._algorithm = algorithm
+    def getAlgorithm(self):
+        return self._algorithm
     def getColor(self):
         return self._color
     def setColor(self, color):

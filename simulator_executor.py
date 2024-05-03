@@ -4,6 +4,7 @@ import simulator_base_classes
 import simulator_base_functions
 import os
 import metrics
+import copy
 from metrics import *
 from scene_preparer import spawnAgents, drawSceneWalls
 from simulator_base_constants import *
@@ -18,23 +19,30 @@ def initPygame(width, height):
     sc.fill(BGCOLOR)
     return sc, clock
 
-def initAlgorithm(Algorithm, rCnt, A):
-    if issubclass(Algorithm, DSSAAlgorithm):
-        return Algorithm(rCnt, A) 
-    else:
-        return Algorithm()
+def algorithmSetup(algorithm, objs, rCnt, obstacles):
+    if issubclass(type(algorithm), ContextRequiredAlgorithm):
+        for obj in objs[:rCnt]:
+            obj.getAlgorithm().setup(objs, rCnt, obstacles)
 
-def initScene(rCnt, sceneGenerator, Algorithm, O, A):
-    objs = [Robot(np.array([0, 0, 0]), color = tupleIntMul(1/rCnt, tupleSum(tupleIntMul(j, MINROBOTCOLOR), tupleIntMul((rCnt - j), MAXROBOTCOLOR))), Dir = np.array([1, 0]), r = 20, algorithm = initAlgorithm(Algorithm, rCnt, A)) for j in range(0, rCnt)]
-    objectsDescriptor, anchorCnt = sceneGenerator.generate(objs)
+def initScene(rCnt, sceneGenerator, algorithm, O):
+    objs = [Robot(
+                  np.array([0, 0, 0]), 
+                  color = tupleIntMul(1/rCnt, tupleSum(tupleIntMul(j, MINROBOTCOLOR), tupleIntMul((rCnt - j), MAXROBOTCOLOR))), 
+                  Dir = np.array([1, 0]), 
+                  r = 20, 
+                  algorithm = copy.deepcopy(algorithm)
+                 )
+            for j in range(0, rCnt)]
+    obstacles, anchorCnt = sceneGenerator.generate(objs)
     spawnAgents(objs, sceneGenerator.getSpawnPoint(), rCnt)
-    return Scene(objs, O), objs, objectsDescriptor, anchorCnt
+    algorithmSetup(algorithm, objs, rCnt, obstacles)
+    return Scene(objs, O), objs, obstacles, anchorCnt
 
-def runSimulator(sceneGenerator, Algorithm, metricsWriter, 
+def runSimulator(sceneGenerator, algorithm, metricsWriter, 
                  width = DEFAULT_WIDTH, 
                  height = DEFAULT_HEIGHT, 
-                 O = DEFAULT_O, 
-                 A = DEFAULT_WIDTH * DEFAULT_HEIGHT):
+                 O = DEFAULT_O,
+                 anchor_generation_count = DEFAULT_ANCHOR_GENERATION_COUNT):
     if drawing:
         #При визуализации запускаемся только один раз
         simulationCount = 1
@@ -49,7 +57,7 @@ def runSimulator(sceneGenerator, Algorithm, metricsWriter,
         simulationCount = simulationCount - 1
         rCnt = rCnts[simulationCount]
         #Robots placement at the beggining of the corridor
-        sm, objs, objectsDescriptor, anchorCnt = initScene(rCnt, sceneGenerator, Algorithm, O, A)
+        sm, objs, obstacles, anchorCnt = initScene(rCnt, sceneGenerator, algorithm, O)
         
         running = 1
         energy = 0
@@ -64,23 +72,22 @@ def runSimulator(sceneGenerator, Algorithm, metricsWriter,
                     if objs[j].isLive():
                         objs[j].draw(sc, O)
                 if wallsDrawing:
-                    drawSceneWalls(sc, O, objectsDescriptor)
+                    drawSceneWalls(sc, O, obstacles)
                 pygame.display.update()
-            #Костыль для SSND
-            # if hasattr(algorithm, 'calcEligibility'):
-            #     for j in range(0, rCnt):
-            #         if objs[j].isLive():
-            #             algorithm.calcEligibility(objs, j, rCnt)
+            if issubclass(type(algorithm), CommunicationRequiredAlgorithm):
+                for j in range(0, rCnt):
+                    if objs[j].isLive():
+                        objs[j].getAlgorithm().receiveData(communicationAvailableAgents(objs, j, rCnt, RVis))
             #Все перемещения происходят здесь
             sumV = 0
             for j in range(0, rCnt):
                 if objs[j].isLive():
-                    newV = objs[j].calcSpeed(measureVisibleObjects(objs, objectsDescriptor, j, rCnt, RVis))
+                    newV = objs[j].calcSpeed(measureVisibleObjects(objs, obstacles, j, rCnt, RVis, anchor_generation_count))
                     sumV += la.norm(newV)
                     energy += la.norm(newV) / 100
             #Проверка завершения эксперимента и сбор метрик
             if checkTerminateCondition(running, maxrunning, sumV, rCnt, maxV):
-                robotAreaCnt, workAreaCnt, sensorCoverageUniformity, uniformity = calculateMetrics(objs, rCnt, objectsDescriptor, RVis, running)
+                robotAreaCnt, workAreaCnt, sensorCoverageUniformity, uniformity = calculateMetrics(objs, rCnt, obstacles, RVis, running)
                 metricsWriter(rCnt, running * 0.02, energy, np.mean([la.norm(objs[k].getPos() - startPoints[k]) for k in range(0, rCnt)])/100, robotAreaCnt / workAreaCnt * 100, uniformity, sensorCoverageUniformity)
                 running = maxrunning
             #Стирание роботов и прорисовка границ объектов

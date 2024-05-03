@@ -82,12 +82,17 @@ def inRange(arg, left, right):
 def pntInRect(pnt, A, B):
     return inRange(pnt[0], A[0], B[0]) and inRange(pnt[1], A[1], B[1])
 
+def communicationAvailableAgents(objs, agentId, rCnt, RVis):
+    return [obj.getAlgorithm() for obj in objs[:rCnt] if la.norm(obj.getPos() - objs[agentId].getPos()) < RVis]
+
 def measureVisibleObjects(objs, objectsDescriptor, agentId, rCnt, RVis, generationCount = DEFAULT_ANCHOR_GENERATION_COUNT):
     res = []
+    labels = []
     for i, agent in enumerate(objs):
         p = agent.getPos() - objs[agentId].getPos()
         if i != agentId and la.norm(p) < RVis:
             res.append(p)
+            labels.append('Agent' if i < rCnt else 'Wall')
     for a in objectsDescriptor:
         for a1, a2 in zip(a, np.roll(a, len(a[0]))):
             proj = getPointToSegmentProjection(objs[agentId].getPos(), a1, a2) - objs[agentId].getPos()
@@ -97,7 +102,8 @@ def measureVisibleObjects(objs, objectsDescriptor, agentId, rCnt, RVis, generati
                 for p in [proj + t * v for t in range(-generationCount, generationCount + 1)]:
                     if pntInRect(p + objs[agentId].getPos(), a1, a2) and la.norm(p) < RVis:
                         res.append(p)
-    return res
+                        labels.append('Wall')
+    return {'Positions': res, 'Labels': labels}
 
 def measureVisibleObjectsSimple(objs, agentId, rCnt, RVis):
     res = []
