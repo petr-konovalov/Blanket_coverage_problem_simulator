@@ -22,6 +22,7 @@ class DiscreteTimeSpeedConstraintsAlgorithm(Algorithm):
         self.Slim = Slim
         self.Ocnt = 0
         self.Scnt = 0
+        self.state = 'ordinary'
         self.prevSpeed = np.zeros(3)
         
     def applySpeedConstraints(self, speed):
@@ -60,7 +61,6 @@ class SWARMAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, CommunicationRequire
         self.w1 = 0.4
         self.w2 = 0.4
         self.w3 = 1 - self.w1 - self.w2
-        self.state = 'ordinary'
         
     def getResponse(self):
         return self.prevSpeed
@@ -114,17 +114,16 @@ class VFASFAlgorithm(DynamicContextRequiredAlgorithm):
         
     def calcSpeed(self, visibleObjects):
         force = -self.Fcentr * self.position
-        N = [[la.norm(vec), vec] for vec in visibleObjects['Positions']]
-        print(N)
+        N = [[la.norm(vec)] + list(vec) for vec in visibleObjects['Positions']]
         N.sort()
-        for k, dst, vec in enumerate(N):
+        for k, vec in enumerate(N):
             check = True
-            for d, v in N[:k]:
-                if dot(vec, v) / (dst * d) >= 0.5:
+            for v in N[:k]:
+                if dot(vec[1:], v[1:]) / (vec[0] * v[0]) >= 0.5:
                     check = False
                     break
             if check:
-                force += self.kap * (dst - RVis/mh.sqrt(3)) * vec / dst
+                force += self.kap * (vec[0] - RVis/mh.sqrt(3)) * np.array(vec[1:]) / vec[0]
         self.speed = self.applySpeedConstraints((self.speed + force)/(1 + self.gamma))
         return self.speed
 
@@ -226,7 +225,6 @@ class DSSAAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequire
     def __init__(self, A):
         super().__init__()
         self.A = A
-        self.state = 'ordinary'
         
     def setup(self, objects, agentsCount, obstacles):
         self.mu = agentsCount * 3.14 * RVis ** 2 / self.A
@@ -253,69 +251,32 @@ class SODAAlgorithm(DSSAAlgorithm):
     def partialForce(self, D, vec, dst):
         return -(D / (self.mu * (D if D > self.mu else self.mu))) * (RVis - dst) * vec / dst
 
-class SSNDAlgorithm(DSSAAlgorithm):
+class SSNDAlgorithm(DSSAAlgorithm, CommunicationRequiredAlgorithm):
     def __init__(self, A, alpha = 1):
-        super().__init__(A)
+        super().__init__(A = A)
         self.alpha = alpha
+        self.M = 0
+        self.F = np.zeros(3)
+        self.Elig = 0
+
+    def getResponse(self):
+        return {'F': self.F, 'Eligibility': self.Elig}
         
     def getName(self):
         return 'SSND'
-        
-    def algorithmSetup(self, rCnt):
-        super().algorithmSetup(rCnt)
-        self.M = np.zeros(rCnt)
-        self.F = np.zeros([rCnt, 3])
-        self.Elig = np.zeros([rCnt])
 
-    def calcEligibility(self, objs, agentId, rCnt):
-        self.F[agentId] = 0
-        self.Elig[agentId] = 0
-        if objs[agentId].getState() == 'ordinary':
-            D = 0
-            for k in range(0, rCnt):
-                dst = la.norm(objs[k].getPos() - objs[agentId].getPos())
-                if 0 < dst and dst < RVis:
-                    D += 1
-            for k in range(0, rCnt + anchorCnt):
-                vec = objs[k].getPos() - objs[agentId].getPos()
-                dst = la.norm(vec)
-                if dst > 0 and dst < RVis:
-                    self.F[agentId] += self.partialForce(5 if k >= rCnt else 1, D, vec, dst)
-            Nlf = 0
-            for k in range(0, rCnt): 
-                vec = objs[k].getPos() - objs[agentId].getPos()
-                dst = la.norm(vec)
-                if dst > 0 and dst < RVis:
-                    if la.norm(self.F[agentId]) >= la.norm(self.F[k]):
-                        Nlf += 1
-            Felig = Nlf - self.M[agentId]
-            self.Elig[agentId] = (self.alpha * Felig - abs(self.mu - D)) 
+    def calcEligibility(self):
+        self.Elig = -maxrunning if self.state != 'ordinary' else (self.alpha * 
+                         (len([1 for data in self.receivedData if la.norm(self.F) >= la.norm(data['F'])]) - self.M) - 
+                     abs(self.mu - len(self.receivedData))) 
         
-    def calcSpeed(self, objs, agentId, rCnt):
-        newV = np.array([0.0, 0.0, 0.0])
-        mElig = -maxrunning
-        for k in range(0, rCnt): 
-            dst = la.norm(objs[k].getPos() - objs[agentId].getPos())
-            if dst > 0 and dst < RVis:
-                mElig = max(mElig, self.Elig[k])
-        if self.Elig[agentId] >= mElig:
-            newV = self.F[agentId]
-            self.M[agentId] += 1
-            if la.norm(objs[agentId].getPos() - self.prevPos[agentId]) < self.e:
-                self.Scnt[agentId] += 1
-            if self.Scnt[agentId] >= self.Slim:
-                newV = np.array([0.0, 0.0, 0.0])
-                objs[agentId].setState('stop')
-            nextPos = objs[agentId].getPos() + newV
-            if la.norm(nextPos - self.prevPos[agentId]) < self.e:
-                self.Ocnt[agentId] += 1
-            if self.Ocnt[agentId] >= self.Olim:
-                newV = newV / 2
-                objs[agentId].setState('stop')
-            self.prevPos[agentId] = objs[agentId].getPos()
+    def calcSpeed(self, visibleObjects):
+        moving = self.Elig >= max([data['Eligibility'] for data in self.receivedData])
+        self.calcEligibility()
+        self.F = super().calcSpeed(visibleObjects)
+        if moving:
+            self.M += 1
+            self.F = self.applySpeedConstraints(self.F)
+            return self.F
         else:
-            newV = np.array([0.0, 0.0, 0.0])
-        absV = la.norm(newV)
-        if absV > maxV:
-            newV = newV / absV * maxV
-        return newV
+            return np.zeros(3)
