@@ -84,7 +84,11 @@ def runSimulator(sceneGenerator, algorithm, metricsWriter,
                 if objs[j].isLive():
                     if issubclass(type(algorithm), DynamicContextRequiredAlgorithm):
                         objs[j].getAlgorithm().update(objs, rCnt, j)
-                    newV = objs[j].calcSpeed(measureVisibleObjects(objs, obstacles, j, rCnt, RVis, anchor_generation_count))
+                    newV = objs[j].calcSpeed(
+                        topologicalOptimizationFilter(
+                            measureVisibleObjects(objs, obstacles, j, rCnt, RVis, anchor_generation_count)
+                        )
+                    )
                     sumV += la.norm(newV)
                     energy += la.norm(newV) / 100
             #Проверка завершения эксперимента и сбор метрик

@@ -105,6 +105,15 @@ def measureVisibleObjects(objs, objectsDescriptor, agentId, rCnt, RVis, generati
                         labels.append('Wall')
     return {'Positions': res, 'Labels': labels}
 
+def topologicalOptimizationFilter(visibleObjects):
+    if topologicalOptimization <= 0:
+        return visibleObjects
+    else:
+        res = [[la.norm(v), k] for k, v in enumerate(visibleObjects['Positions'])]
+        res.sort()
+        res = res[:topologicalOptimization]
+        return {'Positions': [visibleObjects['Positions'][k] for _, k in res], 'Labels': [visibleObjects['Labels'][k] for _, k in res]}
+
 def measureVisibleObjectsSimple(objs, agentId, rCnt, RVis):
     res = []
     for i, agent in enumerate(objs):
