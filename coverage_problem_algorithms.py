@@ -127,99 +127,89 @@ class VFASFAlgorithm(DynamicContextRequiredAlgorithm):
         self.speed = self.applySpeedConstraints((self.speed + force)/(1 + self.gamma))
         return self.speed
 
-class CSAAlgorithm(Algorithm):
-    def __init__(self, sectorCount = 6, speedCoef = 20):
-        self.secCnt = sectorCount
-        self.speedCoef = speedCoef
-    
-    def getName(self):
-        return 'CSA'
-        
-    def calcSpeed(self, visibleObjects):
-        wSecSum = np.zeros([self.secCnt])
-        secDir = [normir(np.array([cos(k*pi/self.secCnt*2)+cos((k+1)*pi/self.secCnt*2),
-                                      sin(k*pi/self.secCnt*2)+sin((k+1)*pi/self.secCnt*2), 0])) for k in range(0, self.secCnt)]
-        secNearest = np.array([s * RVis for s in secDir])
-        for vec in visibleObjects['Positions']:
-            nvec = la.norm(vec)
-            ang = mh.atan2(mul(np.array([1, 0]), vec), dot(np.array([1, 0]), vec))
-            angId = int(ang / pi * self.secCnt*0.5+self.secCnt)%self.secCnt
-            angLeftId = (angId + self.secCnt - 1) % self.secCnt
-            angRightId = (angId + 1) % self.secCnt
-            angLeft = angId * 2 * pi / self.secCnt
-            angRight = angLeft + 2 * pi / self.secCnt
-            vecLeft = np.array([cos(angLeft), sin(angLeft), 0])
-            vecRight = np.array([cos(angRight), sin(angRight), 0])
-            dL = abs(mul(vecLeft, vec))
-            dR = abs(mul(vecRight, vec))
-            leftProj = (secDir[angLeftId] * RVis * dL + vecLeft * nvec * dR) / (dR + dL)
-            rightProj = (secDir[angRightId] * RVis * dR + vecRight * nvec * dL) / (dR + dL)
-            leftProj = normir(leftProj) * max(nvec, min(la.norm(leftProj), RVis))
-            rightProj = normir(rightProj) * max(nvec, min(la.norm(rightProj), RVis))
-            if nvec > 0: 
-                cD = mul(secDir[angId], vec)
-                rD = RVis - nvec
-                if max(rD, 0.01) < abs(cD):
-                    vec = vec + np.array([secDir[angId][1], 
-                                          -secDir[angId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
-                    vec = vec / la.norm(vec) * nvec
-                if wSecSum[angId] == 0:
-                    secNearest[angId, :] = np.zeros(3)
-                w = (RVis - nvec) ** 2
-                wSecSum[angId] += w 
-                secNearest[angId, :] += vec * w
-            nLeftProj = la.norm(leftProj)
-            if nLeftProj > 0:
-                cD = mul(secDir[angLeftId], leftProj)
-                rD = RVis - nLeftProj
-                if max(rD, 0.01) < abs(cD):
-                    leftProj = leftProj + np.array([secDir[angLeftId][1], 
-                                                    -secDir[angLeftId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
-                    leftProj = leftProj / la.norm(leftProj) * nLeftProj
-                if wSecSum[angLeftId] == 0:
-                    secNearest[angLeftId, :] = np.zeros(3)
-                w = (RVis - la.norm(leftProj)) ** 2
-                wSecSum[angLeftId] += w
-                secNearest[angLeftId, :] += leftProj * w
-            nRightProj = la.norm(rightProj)
-            if nRightProj > 0:
-                cD = mul(secDir[angRightId], rightProj)
-                rD = RVis - nRightProj
-                if max(rD, 0.01) < abs(cD):
-                    rightProj = rightProj + np.array([secDir[angRightId][1], 
-                                                      -secDir[angRightId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
-                    rightProj = rightProj / la.norm(rightProj) * nRightProj
-                if wSecSum[angRightId] == 0:
-                    secNearest[angRightId, :] = np.zeros(3)
-                w = (RVis - la.norm(rightProj)) ** 2
-                wSecSum[angRightId] += w
-                secNearest[angRightId, :] += rightProj * w
-        z = wSecSum > 0
-        secNearest[z] = (secNearest[z].T / wSecSum[z]).T
-        meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
-        return self.applySpeedConstraints(self.speedCoef * 
-            sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest  if la.norm(S) > 0]))
-
 class SAAlgorithm(Algorithm):
     def __init__(self, sectorCount = 6, speedCoef = 12):
         self.secCnt = sectorCount
         self.speedCoef = 12
+        self.secBisectors = [np.array([cos(a), sin(a), 0]) for a in [(k+0.5)*pi/self.secCnt*2 for k in range(0, self.secCnt)]] 
+
+    def getSecId(self, v):
+        ang = mh.atan2(mul(np.array([1, 0]), v), dot(np.array([1, 0]), v))
+        return int(ang / pi * self.secCnt * 0.5 + self.secCnt) % self.secCnt
         
     def getName(self):
         return 'SA'
         
     def calcSpeed(self, visibleObjects):
-        secNearest = np.array([RVis * normir(np.array([cos(k*pi/self.secCnt*2)+cos((k+1)*pi/self.secCnt*2),
-                                                       sin(k*pi/self.secCnt*2)+sin((k+1)*pi/self.secCnt*2), 0])) 
-                               for k in range(0, self.secCnt)])
+        secNearest = np.array([RVis * d for d in self.secBisectors])
         for v in visibleObjects['Positions']:
-            ang = mh.atan2(mul(np.array([1, 0]), v), dot(np.array([1, 0]), v))
-            angId = int(ang / pi * self.secCnt*0.5+self.secCnt)%self.secCnt
-            if la.norm(secNearest[angId, :]) > la.norm(v):
-                secNearest[angId, :] = v
+            secId = self.getSecId(v)
+            if la.norm(secNearest[secId, :]) > la.norm(v):
+                secNearest[secId, :] = v
         meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
         return self.applySpeedConstraints(self.speedCoef * 
             sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest]))
+
+class CSAAlgorithm(SAAlgorithm):
+    def __init__(self, sectorCount = 6, speedCoef = 20):
+        super().__init__(sectorCount, speedCoef)
+    
+    def getName(self):
+        return 'CSA'
+
+    def getLeftRightSecs(self, secId):
+        angLeft = secId * 2 * pi / self.secCnt
+        return angLeft, (secId + self.secCnt - 1) % self.secCnt, angLeft + 2 * pi / self.secCnt, (secId + 1) % self.secCnt
+
+    def calcReflections(self, v, vLen, angLeft, secLeftId, angRight, secRightId):
+        vecLeft = np.array([cos(angLeft), sin(angLeft), 0])
+        vecRight = np.array([cos(angRight), sin(angRight), 0])
+        dL = abs(mul(vecLeft, v))
+        dR = abs(mul(vecRight, v))
+        leftReflection = (self.secBisectors[secLeftId] * RVis * dL + vecLeft * vLen * dR) / (dR + dL)
+        rightReflection = (self.secBisectors[secRightId] * RVis * dR + vecRight * vLen * dL) / (dR + dL)
+        leftReflection = normir(leftReflection) * max(vLen, min(la.norm(leftReflection), RVis))
+        rightReflection = normir(rightReflection) * max(vLen, min(la.norm(rightReflection), RVis))
+        return leftReflection, rightReflection
+
+    def calcShadow(self, v, vLen, secId):
+        cD = mul(self.secBisectors[secId], v)
+        rD = RVis - vLen
+        if max(rD, 0) < abs(cD):
+            v = v + np.array([self.secBisectors[secId][1], 
+                              -self.secBisectors[secId][0], 0]) * cD / abs(cD) * (abs(cD) - rD)
+            v = v / la.norm(v) * vLen
+        return v
+
+    def updateContinuousNearest(self, v, w, secId, weightsSumBySec, secNearest):
+        if weightsSumBySec[secId] == 0:
+            secNearest[secId, :] = np.zeros(3)
+        weightsSumBySec[secId] += w 
+        secNearest[secId, :] += v * w            
+
+    def calcShadowAndUpdate(self, v, vLen, secId, weightsSumBySec, secNearest):
+        if vLen > 0: 
+            self.updateContinuousNearest(self.calcShadow(v, vLen, secId), (RVis - vLen) ** 2, secId, weightsSumBySec, secNearest)
+
+    def calcContinuousNearest(self, weightsSumBySec, secNearest):
+        nonZeroWeights = weightsSumBySec > 0
+        secNearest[nonZeroWeights] = (secNearest[nonZeroWeights].T / weightsSumBySec[nonZeroWeights]).T
+        
+    def calcSpeed(self, visibleObjects):
+        weightsSumBySec = np.zeros([self.secCnt])
+        secNearest = np.array([s * RVis for s in self.secBisectors])
+        for v in visibleObjects['Positions']:
+            vLen = la.norm(v)
+            secId = self.getSecId(v)
+            angLeft, secLeftId, angRight, secRightId = self.getLeftRightSecs(secId)
+            leftRef, rightRef = self.calcReflections(v, vLen, angLeft, secLeftId, angRight, secRightId)
+            self.calcShadowAndUpdate(v, vLen, secId, weightsSumBySec, secNearest)
+            self.calcShadowAndUpdate(leftRef, la.norm(leftRef), secLeftId, weightsSumBySec, secNearest)
+            self.calcShadowAndUpdate(rightRef, la.norm(rightRef), secRightId, weightsSumBySec, secNearest)
+        self.calcContinuousNearest(weightsSumBySec, secNearest)
+        meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
+        return self.applySpeedConstraints(self.speedCoef * 
+            sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest  if la.norm(S) > 0]))
 
 class DSSAAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequiredAlgorithm):
     def __init__(self, A):
