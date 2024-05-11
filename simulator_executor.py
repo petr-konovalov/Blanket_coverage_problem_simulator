@@ -29,7 +29,7 @@ def initScene(rCnt, sceneGenerator, algorithm, O):
                   np.array([0, 0, 0]), 
                   color = tupleIntMul(1/rCnt, tupleSum(tupleIntMul(j, MINROBOTCOLOR), tupleIntMul((rCnt - j), MAXROBOTCOLOR))), 
                   Dir = np.array([1, 0]), 
-                  r = 20, 
+                  r = 15, 
                   algorithm = copy.deepcopy(algorithm)
                  )
             for j in range(0, rCnt)]

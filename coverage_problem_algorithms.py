@@ -130,8 +130,8 @@ class VFASFAlgorithm(DynamicContextRequiredAlgorithm):
 class SAAlgorithm(Algorithm):
     def __init__(self, sectorCount = 6, speedCoef = 12):
         self.secCnt = sectorCount
-        self.speedCoef = 12
-        self.secBisectors = [np.array([cos(a), sin(a), 0]) for a in [(k+0.5)*pi/self.secCnt*2 for k in range(0, self.secCnt)]] 
+        self.speedCoef = speedCoef
+        self.secBisectors = [np.array([cos(a), sin(a), 0]) for a in [(k+0.5)*pi/sectorCount*2 for k in range(0, sectorCount)]] 
 
     def getSecId(self, v):
         ang = mh.atan2(mul(np.array([1, 0]), v), dot(np.array([1, 0]), v))

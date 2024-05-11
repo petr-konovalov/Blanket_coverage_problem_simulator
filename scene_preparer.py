@@ -4,7 +4,9 @@ import simulator_base_constants
 from simulator_base_constants import *
 from math import ceil
 
-def spawnAgents(objs, spawn_point, rCnt, SpawnR = 100, botDist = 1):
+def spawnAgents(objs, spawn_point, rCnt, 
+                SpawnR = 300,#100, 
+                botDist = 1):
     for j in range(0, rCnt):
         position = spawn_point + getRndCrcPnt(SpawnR)
         position[2] = 0
@@ -104,4 +106,24 @@ class Maze1SceneGenerator(SceneGenerator):
         return np.array([-400, -300, 0])
     def getName(self):
         return 'Maze1'
+
+class Maze2SceneGenerator(SceneGenerator):
+    def generate(self, objs):
+        objectsDescriptor = [np.array([[-1364, -662, 0], [-666, -664, 0], [-668, -116, 0], [-500, -118, 0], [-504, -662, 0], [172, -668, 0], [192, 184, 0], [-1028, 218, 0], [-1030, 340, 0], [396, 332, 0], [390, -664, 0], [1338, -664, 0], [1342, -82, 0], [758, -78, 0], [758, 116, 0], [1338, 112, 0], [1346, 666, 0], [-122, 666, 0], [-136, 504, 0], [-548, 506, 0], [-546, 674, 0], [-1360, 660, 0]]),
+ np.array([[-270, -438, 0], [-278, -2, 0], [-106, -2, 0], [0, -426, 0]])]
+        return objectsDescriptor, generateSceneByDescriptor(objectsDescriptor, objs, len(objs))
+    def getSpawnPoint(self):
+        return np.array([-1000, -300, 0])
+    def getName(self):
+        return 'Maze2'
+
+class Maze3SceneGenerator(SceneGenerator):
+    def generate(self, objs):
+        objectsDescriptor = [np.array([[-1364, -662, 0], [-666, -664, 0], [-668, -116, 0], [-500, -118, 0], [-504, -662, 0], [172, -668, 0], [192, 184, 0], [-1028, 218, 0], [-1030, 340, 0], [396, 332, 0], [390, -664, 0], [1338, -664, 0], [1342, -82, 0], [758, -78, 0], [758, 116, 0], [1338, 112, 0], [1346, 666, 0], [-1380, 654, 0]]),
+ np.array([[-292, -422, 0], [-284, -4, 0], [-104, -14, 0], [-26, -404, 0]])]
+        return objectsDescriptor, generateSceneByDescriptor(objectsDescriptor, objs, len(objs))
+    def getSpawnPoint(self):
+        return np.array([-1000, -300, 0])
+    def getName(self):
+        return 'Maze3'
         
