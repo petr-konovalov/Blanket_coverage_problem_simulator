@@ -38,78 +38,72 @@ def initScene(rCnt, sceneGenerator, algorithm, O):
     algorithmSetup(algorithm, objs, rCnt, obstacles)
     return Scene(objs, O), objs, obstacles, anchorCnt
 
-def runSimulator(sceneGenerator, algorithm, metricsWriter, 
+def runSimulator(sceneGenerator, rCnt, algorithm, metricsWriter,
                  width = DEFAULT_WIDTH, 
                  height = DEFAULT_HEIGHT, 
                  O = DEFAULT_O,
                  anchor_generation_count = DEFAULT_ANCHOR_GENERATION_COUNT):
     if drawing:
         #При визуализации запускаемся только один раз
-        simulationCount = 1
         if saving:
-            dirPath = "Experiment as scene " + sceneGenerator.getName() + " with algorithm " + algorithm.getName() + " robots count " +str(rCnts[0])
+            dirPath = "Experiment as scene " + sceneGenerator.getName() + " with algorithm " + algorithm.getName() + " robots count " +str(rCnt)
             os.makedirs(dirPath)
         sc, clock = initPygame(width, height)
-    else:
-        simulationCount = len(rCnts)
     
-    while simulationCount > 0:
-        simulationCount = simulationCount - 1
-        rCnt = rCnts[simulationCount]
-        #Robots placement at the beggining of the corridor
-        sm, objs, obstacles, anchorCnt = initScene(rCnt, sceneGenerator, algorithm, O)
-        
-        running = 1
-        energy = 0
-        startPoints = [obj.getPos() for obj in objs[:rCnt]]
-        while running >= 0 and running <= maxrunning:
-            #Прорисовка роботов
-            if drawing:
-                StartTime = time.time()
-                for i in pygame.event.get():
-                    if i.type == pygame.QUIT: running = -10
-                for j in range(0, rCnt + (anchorCnt if anchorDrawing else 0)):
-                    if objs[j].isLive():
-                        objs[j].draw(sc, O)
-                if wallsDrawing:
-                    drawSceneWalls(sc, O, obstacles)
-                pygame.display.update()
-            if issubclass(type(algorithm), CommunicationRequiredAlgorithm):
-                for j in range(0, rCnt):
-                    if objs[j].isLive():
-                        objs[j].getAlgorithm().receiveData(communicationAvailableAgents(objs, j, rCnt, RVis))
-            #Все перемещения происходят здесь
-            sumV = 0
+    #Robots placement at the beggining of the corridor
+    sm, objs, obstacles, anchorCnt = initScene(rCnt, sceneGenerator, algorithm, O)
+    
+    running = 1
+    energy = 0
+    startPoints = [obj.getPos() for obj in objs[:rCnt]]
+    while running >= 0 and running <= maxrunning:
+        #Прорисовка роботов
+        if drawing:
+            StartTime = time.time()
+            for i in pygame.event.get():
+                if i.type == pygame.QUIT: running = -10
+            for j in range(0, rCnt + (anchorCnt if anchorDrawing else 0)):
+                if objs[j].isLive():
+                    objs[j].draw(sc, O)
+            if wallsDrawing:
+                drawSceneWalls(sc, O, obstacles)
+            pygame.display.update()
+        if issubclass(type(algorithm), CommunicationRequiredAlgorithm):
             for j in range(0, rCnt):
                 if objs[j].isLive():
-                    if issubclass(type(algorithm), DynamicContextRequiredAlgorithm):
-                        objs[j].getAlgorithm().update(objs, rCnt, j)
-                    newV = objs[j].calcSpeed(
-                        topologicalOptimizationFilter(
-                            measureVisibleObjects(objs, obstacles, j, rCnt, RVis, anchor_generation_count)
-                        )
+                    objs[j].getAlgorithm().receiveData(communicationAvailableAgents(objs, j, rCnt, RVis))
+        #Все перемещения происходят здесь
+        sumV = 0
+        for j in range(0, rCnt):
+            if objs[j].isLive():
+                if issubclass(type(algorithm), DynamicContextRequiredAlgorithm):
+                    objs[j].getAlgorithm().update(objs, rCnt, j)
+                newV = objs[j].calcSpeed(
+                    topologicalOptimizationFilter(
+                        measureVisibleObjects(objs, obstacles, j, rCnt, RVis, anchor_generation_count)
                     )
-                    sumV += la.norm(newV)
-                    energy += la.norm(newV) / 100
-            #Проверка завершения эксперимента и сбор метрик
-            if checkTerminateCondition(running, maxrunning, sumV, rCnt, maxV):
-                robotAreaCnt, workAreaCnt, sensorCoverageUniformity, uniformity = calculateMetrics(objs, rCnt, obstacles, RVis, running)
-                metricsWriter(rCnt, running * 0.02, energy, np.mean([la.norm(objs[k].getPos() - startPoints[k]) for k in range(0, rCnt)])/100, robotAreaCnt / workAreaCnt * 100, uniformity, sensorCoverageUniformity)
-                running = maxrunning
-            #Стирание роботов и прорисовка границ объектов
-            if drawing:
-                if saving:
-                    pygame.image.save(sc, dirPath + "/Frame " + str(running).zfill(6) + ".png")
-                for j in range(0, rCnt):
-                    if objs[j].isLive():
-                        objs[j].hide(sc, O)
-    
-            sm.action()
-            
-            running = running + 1
-            if drawing:
-                SleepTime = SForFrame + StartTime - time.time()
-                if SleepTime > 0:
-                    time.sleep(SleepTime)
+                )
+                sumV += la.norm(newV)
+                energy += la.norm(newV) / 100
+        #Проверка завершения эксперимента и сбор метрик
+        if checkTerminateCondition(running, maxrunning, sumV, rCnt, maxV):
+            robotAreaCnt, workAreaCnt, sensorCoverageUniformity, uniformity = calculateMetrics(objs, rCnt, obstacles, RVis, running)
+            metricsWriter(rCnt, running * 0.02, energy, np.mean([la.norm(objs[k].getPos() - startPoints[k]) for k in range(0, rCnt)])/100, robotAreaCnt / workAreaCnt * 100, uniformity, sensorCoverageUniformity)
+            running = maxrunning
+        #Стирание роботов и прорисовка границ объектов
         if drawing:
-            pygame.quit()
+            if saving:
+                pygame.image.save(sc, dirPath + "/Frame " + str(running).zfill(6) + ".png")
+            for j in range(0, rCnt):
+                if objs[j].isLive():
+                    objs[j].hide(sc, O)
+
+        sm.action()
+        
+        running = running + 1
+        if drawing:
+            SleepTime = SForFrame + StartTime - time.time()
+            if SleepTime > 0:
+                time.sleep(SleepTime)
+    if drawing:
+        pygame.quit()
