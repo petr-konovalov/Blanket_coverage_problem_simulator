@@ -25,7 +25,7 @@ spawnGrowthSpeed = 1.1
 
 topologicalOptimization = 18
 drawing = True
-saving = False
+saving = True
 anchorDrawing = True
 wallsDrawing = True
 maxrunning = 7000#2400 # 1 секунда == 50 кадров

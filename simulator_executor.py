@@ -46,7 +46,7 @@ def runSimulator(sceneGenerator, rCnt, algorithm, metricsWriter,
     if drawing:
         #При визуализации запускаемся только один раз
         if saving:
-            dirPath = "Experiment as scene " + sceneGenerator.getName() + " with algorithm " + algorithm.getName() + " robots count " +str(rCnt)
+            dirPath = "Experiment as scene " + sceneGenerator.getName() + " with algorithm " + type(algorithm).__name__ + " robots count " +str(rCnt)
             os.makedirs(dirPath)
         sc, clock = initPygame(width, height)
     

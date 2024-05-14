@@ -12,8 +12,6 @@ class Algorithm:
         return speed
     def calcSpeed(self, visibleObjects):
         pass
-    def getName(self):
-        pass
 
 class DiscreteTimeSpeedConstraintsAlgorithm(Algorithm):
     def __init__(self, e = 0.52, Olim = 10, Slim = 10):
@@ -64,9 +62,6 @@ class SWARM(DiscreteTimeSpeedConstraintsAlgorithm, CommunicationRequiredAlgorith
         
     def getResponse(self):
         return self.prevSpeed
-
-    def getName(self):
-        return 'SWARM'
     
     def calcSpeed(self, visibleObjects):
         Fsep = np.zeros(3)
@@ -97,9 +92,6 @@ class VFASF(DynamicContextRequiredAlgorithm):
         self.Fcentr = 0.005/2500
         self.gamma = 7.75/50
         self.speed = np.zeros(3)
-
-    def getName(self):
-        return 'VFASF'
         
     def update(self, objects, agentsCount, selfId):
         self.position = objects[selfId].getPos()
@@ -137,9 +129,6 @@ class SA(Algorithm):
         ang = mh.atan2(mul(np.array([1, 0]), v), dot(np.array([1, 0]), v))
         return int(ang / pi * self.secCnt * 0.5 + self.secCnt) % self.secCnt
         
-    def getName(self):
-        return 'SA'
-        
     def calcSpeed(self, visibleObjects):
         secNearest = np.array([RVis * d for d in self.secBisectors])
         for v in visibleObjects['Positions']:
@@ -153,9 +142,6 @@ class SA(Algorithm):
 class CSA(SA):
     def __init__(self, sectorCount = 6, speedCoef = 20):
         super().__init__(sectorCount, speedCoef)
-    
-    def getName(self):
-        return 'CSA'
 
     def getLeftRightSecs(self, secId):
         angLeft = secId * 2 * pi / self.secCnt
@@ -218,9 +204,6 @@ class DSSA(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequiredAlgorith
         
     def setup(self, objects, agentsCount, obstacles):
         self.mu = agentsCount * 3.14 * RVis ** 2 / self.A
-    
-    def getName(self):
-        return 'DSSA'
 
     def partialForce(self, D, vec, dst):
         return -(D / (self.mu ** 2)) * (RVis - dst) * vec / dst
@@ -235,9 +218,6 @@ class DSSA(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequiredAlgorith
         return self.applySpeedConstraints(newV)
 
 class SODA(DSSA):
-    def getName(self):
-        return 'SODA'
-    
     def partialForce(self, D, vec, dst):
         return -(D / (self.mu * (D if D > self.mu else self.mu))) * (RVis - dst) * vec / dst
 
@@ -251,9 +231,6 @@ class SSND(DSSA, CommunicationRequiredAlgorithm):
 
     def getResponse(self):
         return {'F': self.F, 'Eligibility': self.Elig}
-        
-    def getName(self):
-        return 'SSND'
 
     def calcEligibility(self):
         self.Elig = -maxrunning if self.state != 'ordinary' else (self.alpha * 
