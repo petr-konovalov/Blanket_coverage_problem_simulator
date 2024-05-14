@@ -33,10 +33,11 @@ def pointInRobotArea(objs, pnt, RVis):
             return True
     return False
 
-def calculateMetrics(objs, rCnt, objectsDescriptor, RVis, running, leftBound = -1000, rightBound = 1000, downBound = -1000, upBound = 1000, step = 3):
+def calculateMetrics(objs, rCnt, objectsDescriptor, RVis, running, leftBound = -1000, rightBound = 1000, downBound = -1000, upBound = 1000):
     workAreaCnt = 0
     robotAreaCnt = 0
     areaCounts = []
+    step = int(5 * (rightBound - leftBound) * (upBound - downBound) / 4000000)
     for x in range(leftBound, rightBound, step):
         for y in range(downBound, upBound, step):
             if pointInWorkArea(objectsDescriptor, np.array([x, y])):

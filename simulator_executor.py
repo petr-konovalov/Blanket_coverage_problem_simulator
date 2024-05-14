@@ -87,7 +87,11 @@ def runSimulator(sceneGenerator, rCnt, algorithm, metricsWriter,
                 energy += la.norm(newV) / 100
         #Проверка завершения эксперимента и сбор метрик
         if checkTerminateCondition(running, maxrunning, sumV, rCnt, maxV):
-            robotAreaCnt, workAreaCnt, sensorCoverageUniformity, uniformity = calculateMetrics(objs, rCnt, obstacles, RVis, running)
+            robotAreaCnt, workAreaCnt, sensorCoverageUniformity, uniformity = calculateMetrics(objs, rCnt, obstacles, RVis, running,
+                                                                                              leftBound = -int(O[0] / scale),
+                                                                                              rightBound = int((width - O[0]) / scale),
+                                                                                              downBound = -int(O[1] / scale),
+                                                                                              upBound = int((height - O[1]) / scale))
             metricsWriter(rCnt, running * 0.02, energy, np.mean([la.norm(objs[k].getPos() - startPoints[k]) for k in range(0, rCnt)])/100, robotAreaCnt / workAreaCnt * 100, uniformity, sensorCoverageUniformity)
             running = maxrunning
         #Стирание роботов и прорисовка границ объектов

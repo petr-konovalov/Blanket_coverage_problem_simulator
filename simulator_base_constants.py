@@ -28,4 +28,4 @@ drawing = True
 saving = False
 anchorDrawing = True
 wallsDrawing = True
-maxrunning = 10000#2400 # 1 секунда == 50 кадров
+maxrunning = 7000#2400 # 1 секунда == 50 кадров

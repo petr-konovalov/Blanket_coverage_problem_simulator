@@ -54,7 +54,7 @@ class CommunicationRequiredAlgorithm(Algorithm):
     def receiveData(self, availableAgents):
         self.receivedData = [agent.getResponse() for agent in availableAgents]
 
-class SWARMAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, CommunicationRequiredAlgorithm):
+class SWARM(DiscreteTimeSpeedConstraintsAlgorithm, CommunicationRequiredAlgorithm):
     def __init__(self):
         super().__init__()
         self.K = (mh.sqrt(3) * RVis * 0.5) ** 3
@@ -91,7 +91,7 @@ class SWARMAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, CommunicationRequire
                 Fobst /= wallCnt
         return self.applySpeedConstraints(-(self.w1 * (Fsep + Fobst) + self.w2 * Fcoh + self.w3 * Falig))
 
-class VFASFAlgorithm(DynamicContextRequiredAlgorithm):
+class VFASF(DynamicContextRequiredAlgorithm):
     def __init__(self):
         self.kap = 15/2500
         self.Fcentr = 0.005/2500
@@ -127,7 +127,7 @@ class VFASFAlgorithm(DynamicContextRequiredAlgorithm):
         self.speed = self.applySpeedConstraints((self.speed + force)/(1 + self.gamma))
         return self.speed
 
-class SAAlgorithm(Algorithm):
+class SA(Algorithm):
     def __init__(self, sectorCount = 6, speedCoef = 12):
         self.secCnt = sectorCount
         self.speedCoef = speedCoef
@@ -150,7 +150,7 @@ class SAAlgorithm(Algorithm):
         return self.applySpeedConstraints(self.speedCoef * 
             sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest]))
 
-class CSAAlgorithm(SAAlgorithm):
+class CSA(SA):
     def __init__(self, sectorCount = 6, speedCoef = 20):
         super().__init__(sectorCount, speedCoef)
     
@@ -211,7 +211,7 @@ class CSAAlgorithm(SAAlgorithm):
         return self.applySpeedConstraints(self.speedCoef * 
             sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest  if la.norm(S) > 0]))
 
-class DSSAAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequiredAlgorithm):
+class DSSA(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequiredAlgorithm):
     def __init__(self, A):
         super().__init__()
         self.A = A
@@ -234,14 +234,14 @@ class DSSAAlgorithm(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequire
                 newV += self.partialForce(D, vec, la.norm(vec)) 
         return self.applySpeedConstraints(newV)
 
-class SODAAlgorithm(DSSAAlgorithm):
+class SODA(DSSA):
     def getName(self):
         return 'SODA'
     
     def partialForce(self, D, vec, dst):
         return -(D / (self.mu * (D if D > self.mu else self.mu))) * (RVis - dst) * vec / dst
 
-class SSNDAlgorithm(DSSAAlgorithm, CommunicationRequiredAlgorithm):
+class SSND(DSSA, CommunicationRequiredAlgorithm):
     def __init__(self, A, alpha = 1):
         super().__init__(A = A)
         self.alpha = alpha

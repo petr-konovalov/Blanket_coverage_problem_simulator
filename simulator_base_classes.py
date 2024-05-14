@@ -2,7 +2,7 @@ import simulator_base_constants
 from simulator_base_constants import *
 import simulator_base_functions
 from simulator_base_functions import *
-from coverage_problem_algorithms import SAAlgorithm as SA
+from coverage_problem_algorithms import SA
 
 FPS = 200
 SForFrame = 1 / FPS
