@@ -126,7 +126,7 @@ class SA(Algorithm):
         self.secBisectors = [np.array([cos(a), sin(a), 0]) for a in [(k+0.5)*pi/sectorCount*2 for k in range(0, sectorCount)]] 
 
     def getSecId(self, v):
-        ang = mh.atan2(mul(np.array([1, 0]), v), dot(np.array([1, 0]), v))
+        ang = mh.atan2(v[1], v[0])
         return int(ang / pi * self.secCnt * 0.5 + self.secCnt) % self.secCnt
         
     def calcSpeed(self, visibleObjects):
@@ -247,3 +247,41 @@ class SSND(DSSA, CommunicationRequiredAlgorithm):
             return self.F
         else:
             return np.zeros(3)
+
+class ESF(Algorithm): #Empty sector follower
+    def __init__(self, minEmptySectorDegrees = 20, agentSectorDegrees = 120, baseAlgorithm = CSA()):
+        self.minEmptySec = minEmptySectorDegrees / 180.0 * mh.pi
+        self.agentSecHalf = 0.5 * agentSectorDegrees / 180.0 * mh.pi
+        self.baseAlgorithm = baseAlgorithm
+
+    def calcAngleBraces(self, visibleObjects):
+        angleBraces = []
+        for pos, label in zip(visibleObjects['Positions'], visibleObjects['Labels']):
+            angle = mh.atan2(pos[1], pos[0])
+            if label == 'Wall':
+                angleBraces.append((angle, 0))
+                angleBraces.append((angle, 1))
+            elif label == 'Agent':
+                angleBraces.append((angle-self.agentSecHalf, 0))
+                angleBraces.append((angle+self.agentSecHalf, 1))
+        angleBraces.sort()
+        return angleBraces
+        
+    def calcSpeed(self, visibleObjects):
+        angleBraces = self.calcAngleBraces(visibleObjects)
+        maxSector = (0, 0)
+        depth = 0
+        for k, b in enumerate(angleBraces):
+            depth += 1 if b[1] == 0 else -1
+            if depth == 0:
+                if k + 1 == len(angleBraces):
+                    angleWidth = angleBraces[0][0] + 2 * mh.pi - b[0]
+                else:
+                    angleWidth = angleBraces[k+1][0] - b[0]
+                if maxSector[1] - maxSector[0] < angleWidth:
+                    maxSector = (b[0], b[0] + angleWidth)
+        if maxSector[1] - maxSector[0] > self.minEmptySec:
+            target = (maxSector[1] + maxSector[0]) * 0.5
+            return maxV * np.array([cos(target), sin(target), 0])
+        else:
+            return self.baseAlgorithm.calcSpeed(visibleObjects)
