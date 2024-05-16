@@ -249,39 +249,79 @@ class SSND(DSSA, CommunicationRequiredAlgorithm):
             return np.zeros(3)
 
 class ESF(Algorithm): #Empty sector follower
-    def __init__(self, minEmptySectorDegrees = 20, agentSectorDegrees = 120, baseAlgorithm = CSA()):
-        self.minEmptySec = minEmptySectorDegrees / 180.0 * mh.pi
-        self.agentSecHalf = 0.5 * agentSectorDegrees / 180.0 * mh.pi
+    def __init__(self, minEmptySectorDegree = 20, agentSectorDegree = 160, wallSectorDegree = 20, directionStepDegree = 9, baseAlgorithm = CSA()):
+        self.minEmptySec = minEmptySectorDegree / 180.0 * mh.pi
+        self.wallSecHalf = 0.5 * wallSectorDegree / 180.0 * mh.pi
+        self.agentSecHalf = 0.5 * agentSectorDegree / 180.0 * mh.pi
+        self.dirStep = directionStepDegree / 180.0 * mh.pi
         self.baseAlgorithm = baseAlgorithm
+        self.maxSecDebug = (0, 0)
 
-    def calcAngleBraces(self, visibleObjects):
-        angleBraces = []
-        for pos, label in zip(visibleObjects['Positions'], visibleObjects['Labels']):
-            angle = mh.atan2(pos[1], pos[0])
-            if label == 'Wall':
-                angleBraces.append((angle, 0))
-                angleBraces.append((angle, 1))
-            elif label == 'Agent':
-                angleBraces.append((angle-self.agentSecHalf, 0))
-                angleBraces.append((angle+self.agentSecHalf, 1))
-        angleBraces.sort()
-        return angleBraces
+    def getRotationMatrix(self, alpha):
+        return np.array([[cos(alpha), -sin(alpha)], [sin(alpha), cos(alpha)]])
+
+    def getAngle(self, U, V):
+        return mh.atan2(mul(U, V), dot(U, V))
+        
+    def getObjectSector(self, vec, label):
+        if label == 'Agent':
+            return [np.matmul(self.getRotationMatrix(-self.agentSecHalf), vec[:2]), 
+                    np.matmul(self.getRotationMatrix(self.agentSecHalf), vec[:2])]
+        elif label == 'Wall':
+            return [np.matmul(self.getRotationMatrix(-self.wallSecHalf), vec[:2]), 
+                    np.matmul(self.getRotationMatrix(self.wallSecHalf), vec[:2])]
+
+    def getAngleDistFromDirToSector(self, dir, sec):
+        la = self.getAngle(dir, sec[0])
+        ra = self.getAngle(dir, sec[1])
+        if la < 0 and ra > 0:
+            return 0
+        return min(abs(la), abs(ra))
+
+    def getAngleDistFromDirToSectors(self, dir, sectors):
+        res = 2 * mh.pi
+        for sec in sectors:
+            res = min(res, self.getAngleDistFromDirToSector(dir, sec))
+            if res == 0:
+                return 0
+        return res
+            
+    def calcSectors(self, visibleObjects):
+        return [self.getObjectSector(v, l) for v, l in zip(visibleObjects['Positions'], visibleObjects['Labels'])]
+
+    def drawDebug(self, sc, O, p):
+        self.prevSec = self.maxSecDebug
+        if self.maxSecDebug[1] - self.maxSecDebug[0] > self.minEmptySec:
+            L = tuple((p + RVis * np.array([cos(self.maxSecDebug[0]), sin(self.maxSecDebug[0])]))*scale + O[:2])
+            R = tuple((p + RVis * np.array([cos(self.maxSecDebug[1]), sin(self.maxSecDebug[1])]))*scale + O[:2])
+            pygame.draw.line(sc, (255, 165, 0), tuple(p*scale+O[:2]), L, 3)
+            pygame.draw.line(sc, (255, 165, 0), tuple(p*scale+O[:2]), R, 3)
+            pygame.draw.circle(sc, (255, 165, 0), L, 5)
+            pygame.draw.circle(sc, (255, 165, 0), R, 5)
+        
+    def hideDebug(self, sc, O, p):
+        L = tuple((p + RVis * np.array([cos(self.prevSec[0]), sin(self.prevSec[0])]))*scale + O[:2])
+        R = tuple((p + RVis * np.array([cos(self.prevSec[1]), sin(self.prevSec[1])]))*scale + O[:2])
+        pygame.draw.line(sc, (255, 255, 255), tuple(p*scale+O[:2]), L, 10)
+        pygame.draw.line(sc, (255, 255, 255), tuple(p*scale+O[:2]), R, 10)
+        pygame.draw.circle(sc, (255, 255, 255), L, 15)
+        pygame.draw.circle(sc, (255, 255, 255), R, 15)
         
     def calcSpeed(self, visibleObjects):
-        angleBraces = self.calcAngleBraces(visibleObjects)
-        maxSector = (0, 0)
-        depth = 0
-        for k, b in enumerate(angleBraces):
-            depth += 1 if b[1] == 0 else -1
-            if depth == 0:
-                if k + 1 == len(angleBraces):
-                    angleWidth = angleBraces[0][0] + 2 * mh.pi - b[0]
-                else:
-                    angleWidth = angleBraces[k+1][0] - b[0]
-                if maxSector[1] - maxSector[0] < angleWidth:
-                    maxSector = (b[0], b[0] + angleWidth)
-        if maxSector[1] - maxSector[0] > self.minEmptySec:
-            target = (maxSector[1] + maxSector[0]) * 0.5
-            return maxV * np.array([cos(target), sin(target), 0])
+        sectors = self.calcSectors(visibleObjects)
+        rDir = 0
+        rAng = 0
+        rDst = 0
+        for ang in np.arange(0, 2 * mh.pi, self.dirStep):
+            dir = np.array([cos(ang), sin(ang)])
+            dst = self.getAngleDistFromDirToSectors(dir, sectors)
+            if dst > rDst:
+                rDir = dir
+                rAng = ang
+                rDst = dst
+        
+        self.maxSecDebug = [rAng - rDst, rAng + rDst]
+        if 2 * rDst > self.minEmptySec:
+            return 0.5 * maxV * np.array([rDir[0], rDir[1], 0])
         else:
             return self.baseAlgorithm.calcSpeed(visibleObjects)

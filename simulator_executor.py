@@ -65,6 +65,8 @@ def runSimulator(sceneGenerator, rCnt, algorithm, metricsWriter,
             for j in range(0, rCnt + (anchorCnt if anchorDrawing else 0)):
                 if objs[j].isLive():
                     objs[j].draw(sc, O)
+                    if j < rCnt:
+                        objs[j].getAlgorithm().drawDebug(sc, O, objs[j].getPos()[:2])
             if wallsDrawing:
                 drawSceneWalls(sc, O, obstacles)
             pygame.display.update()
@@ -101,6 +103,7 @@ def runSimulator(sceneGenerator, rCnt, algorithm, metricsWriter,
             for j in range(0, rCnt):
                 if objs[j].isLive():
                     objs[j].hide(sc, O)
+                    objs[j].getAlgorithm().hideDebug(sc, O, objs[j].getPos()[:2])
 
         sm.action()
         
