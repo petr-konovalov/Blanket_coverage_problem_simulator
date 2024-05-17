@@ -12,6 +12,12 @@ class Algorithm:
         return speed
     def calcSpeed(self, visibleObjects):
         pass
+    
+class DebugAlgorithm (Algorithm):
+    def hideDebug(self, sc, O, pos):
+        pass
+    def drawDebug(self, sc, O, pos):
+        pass
 
 class DiscreteTimeSpeedConstraintsAlgorithm(Algorithm):
     def __init__(self, e = 0.52, Olim = 10, Slim = 10):
@@ -248,19 +254,41 @@ class SSND(DSSA, CommunicationRequiredAlgorithm):
         else:
             return np.zeros(3)
 
-class ESF(Algorithm): #Empty sector follower
-    def __init__(self, minEmptySectorDegrees = 20, agentSectorDegrees = 120, baseAlgorithm = CSA()):
+class ESF(DebugAlgorithm): #Empty sector follower
+    def __init__(self, minEmptySectorDegrees = 20, agentSectorDegrees = 120, wallSectorDegrees = 20, baseAlgorithm = SA()):
         self.minEmptySec = minEmptySectorDegrees / 180.0 * mh.pi
         self.agentSecHalf = 0.5 * agentSectorDegrees / 180.0 * mh.pi
+        self.wallSecHalf = 0.5 * wallSectorDegrees / 180.0 * mh.pi
         self.baseAlgorithm = baseAlgorithm
+        self.__debugTarget = 0
+        self.__debugMaxSector = (0, 0)
 
+    def hideDebug(self, sc, O, pos):
+        targetDir = np.array([cos(self.__debugOldTarget), sin(self.__debugOldTarget), 0])
+        leftSecBound = np.array([cos(self.__debugOldMaxSector[0]), sin(self.__debugOldMaxSector[0]), 0])
+        rightSecBound = np.array([cos(self.__debugOldMaxSector[1]), sin(self.__debugOldMaxSector[1]), 0])
+        pygame.draw.line(sc, (255, 255, 255), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*targetDir)*scale+O)[:2]), 5)
+        pygame.draw.line(sc, (255, 255, 255), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*leftSecBound)*scale+O)[:2]), 5)
+        pygame.draw.line(sc, (255, 255, 255), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*rightSecBound)*scale+O)[:2]), 5)
+        
+    def drawDebug(self, sc, O, pos):
+        self.__debugOldTarget = self.__debugTarget
+        self.__debugOldMaxSector = self.__debugMaxSector
+        if self.__debugMaxSector[1] - self.__debugMaxSector[0] > self.minEmptySec:
+            targetDir = np.array([cos(self.__debugTarget), sin(self.__debugTarget), 0])
+            leftSecBound = np.array([cos(self.__debugMaxSector[0]), sin(self.__debugMaxSector[0]), 0])
+            rightSecBound = np.array([cos(self.__debugMaxSector[1]), sin(self.__debugMaxSector[1]), 0])
+            pygame.draw.line(sc, (255, 165,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*targetDir)*scale+O)[:2]), 3)
+            pygame.draw.line(sc, (  0, 128,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*leftSecBound)*scale+O)[:2]), 3)
+            pygame.draw.line(sc, (  0, 128,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*rightSecBound)*scale+O)[:2]), 3)
+        
     def calcAngleBraces(self, visibleObjects):
         angleBraces = []
         for pos, label in zip(visibleObjects['Positions'], visibleObjects['Labels']):
             angle = mh.atan2(pos[1], pos[0])
             if label == 'Wall':
-                angleBraces.append((angle, 0))
-                angleBraces.append((angle, 1))
+                angleBraces.append((angle-self.wallSecHalf, 0))
+                angleBraces.append((angle+self.wallSecHalf, 1))
             elif label == 'Agent':
                 angleBraces.append((angle-self.agentSecHalf, 0))
                 angleBraces.append((angle+self.agentSecHalf, 1))
@@ -280,8 +308,12 @@ class ESF(Algorithm): #Empty sector follower
                     angleWidth = angleBraces[k+1][0] - b[0]
                 if maxSector[1] - maxSector[0] < angleWidth:
                     maxSector = (b[0], b[0] + angleWidth)
+        self.__debugMaxSector = maxSector
         if maxSector[1] - maxSector[0] > self.minEmptySec:
             target = (maxSector[1] + maxSector[0]) * 0.5
+            self.__debugTarget = target
             return maxV * np.array([cos(target), sin(target), 0])
         else:
             return self.baseAlgorithm.calcSpeed(visibleObjects)
+        
+        
