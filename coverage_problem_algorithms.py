@@ -255,7 +255,7 @@ class SSND(DSSA, CommunicationRequiredAlgorithm):
             return np.zeros(3)
 
 class ESF(DebugAlgorithm): #Empty sector follower
-    def __init__(self, minEmptySectorDegrees = 20, agentSectorDegrees = 120, wallSectorDegrees = 20, baseAlgorithm = SA()):
+    def __init__(self, minEmptySectorDegrees = 20, agentSectorDegrees = 120, wallSectorDegrees = 5, baseAlgorithm = SA()):
         self.minEmptySec = minEmptySectorDegrees / 180.0 * mh.pi
         self.agentSecHalf = 0.5 * agentSectorDegrees / 180.0 * mh.pi
         self.wallSecHalf = 0.5 * wallSectorDegrees / 180.0 * mh.pi
@@ -281,17 +281,28 @@ class ESF(DebugAlgorithm): #Empty sector follower
             pygame.draw.line(sc, (255, 165,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*targetDir)*scale+O)[:2]), 3)
             pygame.draw.line(sc, (  0, 128,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*leftSecBound)*scale+O)[:2]), 3)
             pygame.draw.line(sc, (  0, 128,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*rightSecBound)*scale+O)[:2]), 3)
+
+    def __checkSegIntersect(self, l1, r1, l2, r2):
+        return l2 <= l1 and l1 <= r2 or l2 <= r1 and r1 <= r2
         
     def calcAngleBraces(self, visibleObjects):
         angleBraces = []
         for pos, label in zip(visibleObjects['Positions'], visibleObjects['Labels']):
             angle = mh.atan2(pos[1], pos[0])
             if label == 'Wall':
-                angleBraces.append((angle-self.wallSecHalf, 0))
-                angleBraces.append((angle+self.wallSecHalf, 1))
+                l = angle-self.wallSecHalf
+                r = angle+self.wallSecHalf
             elif label == 'Agent':
-                angleBraces.append((angle-self.agentSecHalf, 0))
-                angleBraces.append((angle+self.agentSecHalf, 1))
+                l = angle-self.agentSecHalf
+                r = angle+self.agentSecHalf
+            if self.__checkSegIntersect(l-2*mh.pi, r-2*mh.pi, -2*mh.pi, 2*mh.pi):
+                angleBraces.append((l-2*mh.pi, 0))
+                angleBraces.append((r-2*mh.pi, 1))
+            angleBraces.append((l, 0))
+            angleBraces.append((r, 1))
+            if self.__checkSegIntersect(l+2*mh.pi, r+2*mh.pi, -2*mh.pi, 2*mh.pi):
+                angleBraces.append((l+2*mh.pi, 0))
+                angleBraces.append((r+2*mh.pi, 1))
         angleBraces.sort()
         return angleBraces
         
