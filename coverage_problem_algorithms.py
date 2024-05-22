@@ -13,7 +13,7 @@ class Algorithm:
     def calcSpeed(self, visibleObjects):
         pass
     
-class DebugAlgorithm (Algorithm):
+class DebugAlgorithm(Algorithm):
     def hideDebug(self, sc, O, pos):
         pass
     def drawDebug(self, sc, O, pos):
@@ -255,12 +255,12 @@ class SSND(DSSA, CommunicationRequiredAlgorithm):
             return np.zeros(3)
 
 class ESF(DebugAlgorithm): #Empty sector follower
-    def __init__(self, minEmptySectorDegrees = 20, agentSectorDegrees = 120, wallSectorDegrees = 5, baseAlgorithm = SA()):
+    def __init__(self, minEmptySectorDegrees = 20, agentSectorDegrees = 120, wallSectorDegrees = 16, baseAlgorithm = SA()):
         self.minEmptySec = minEmptySectorDegrees / 180.0 * mh.pi
         self.agentSecHalf = 0.5 * agentSectorDegrees / 180.0 * mh.pi
         self.wallSecHalf = 0.5 * wallSectorDegrees / 180.0 * mh.pi
         self.baseAlgorithm = baseAlgorithm
-        self.__debugTarget = 0
+        self.target = 0
         self.__debugMaxSector = (0, 0)
 
     def hideDebug(self, sc, O, pos):
@@ -272,10 +272,10 @@ class ESF(DebugAlgorithm): #Empty sector follower
         pygame.draw.line(sc, (255, 255, 255), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*rightSecBound)*scale+O)[:2]), 5)
         
     def drawDebug(self, sc, O, pos):
-        self.__debugOldTarget = self.__debugTarget
+        self.__debugOldTarget = self.target
         self.__debugOldMaxSector = self.__debugMaxSector
         if self.__debugMaxSector[1] - self.__debugMaxSector[0] > self.minEmptySec:
-            targetDir = np.array([cos(self.__debugTarget), sin(self.__debugTarget), 0])
+            targetDir = np.array([cos(self.target), sin(self.target), 0])
             leftSecBound = np.array([cos(self.__debugMaxSector[0]), sin(self.__debugMaxSector[0]), 0])
             rightSecBound = np.array([cos(self.__debugMaxSector[1]), sin(self.__debugMaxSector[1]), 0])
             pygame.draw.line(sc, (255, 165,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*targetDir)*scale+O)[:2]), 3)
@@ -305,26 +305,44 @@ class ESF(DebugAlgorithm): #Empty sector follower
                 angleBraces.append((r+2*mh.pi, 1))
         angleBraces.sort()
         return angleBraces
-        
-    def calcSpeed(self, visibleObjects):
-        angleBraces = self.calcAngleBraces(visibleObjects)
+
+    def checkDirection(self, angleBraces):
+        if self.target < -mh.pi:
+            self.target += 2 * mh.pi
+        elif self.target >  mh.pi:
+            self.target -= 2 * mh.pi
+        depth = 0
+        for k, b in enumerate(angleBraces[:-1]):
+            depth += 1 if b[1] == 0 else -1
+            if b[0] <= self.target and self.target <= angleBraces[k+1][0]:
+                if depth == 0 and angleBraces[k+1][0] - b[0] > self.minEmptySec:
+                    self.target = (angleBraces[k+1][0] + b[0]) * 0.5
+                    self.__debugMaxSector = (b[0], angleBraces[k+1][0])
+                    return True
+                else:
+                    return False
+        return True
+
+    def findLargestSector(self, angleBraces):
         maxSector = (0, 0)
         depth = 0
-        for k, b in enumerate(angleBraces):
+        for k, b in enumerate(angleBraces[:-1]):
             depth += 1 if b[1] == 0 else -1
             if depth == 0:
-                if k + 1 == len(angleBraces):
-                    angleWidth = angleBraces[0][0] + 2 * mh.pi - b[0]
-                else:
-                    angleWidth = angleBraces[k+1][0] - b[0]
+                angleWidth = angleBraces[k+1][0] - b[0]
                 if maxSector[1] - maxSector[0] < angleWidth:
-                    maxSector = (b[0], b[0] + angleWidth)
+                    maxSector = (b[0], b[0] + angleWidth)        
+        return maxSector
+    
+    def calcSpeed(self, visibleObjects):
+        angleBraces = self.calcAngleBraces(visibleObjects)
+        if self.checkDirection(angleBraces):
+            return maxV * np.array([cos(self.target), sin(self.target), 0])
+        maxSector = self.findLargestSector(angleBraces)
         self.__debugMaxSector = maxSector
         if maxSector[1] - maxSector[0] > self.minEmptySec:
-            target = (maxSector[1] + maxSector[0]) * 0.5
-            self.__debugTarget = target
-            return maxV * np.array([cos(target), sin(target), 0])
+            self.target = (maxSector[1] + maxSector[0]) * 0.5
+            return maxV * np.array([cos(self.target), sin(self.target), 0])
         else:
             return self.baseAlgorithm.calcSpeed(visibleObjects)
-        
         
