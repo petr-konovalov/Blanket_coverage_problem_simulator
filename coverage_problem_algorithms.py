@@ -12,6 +12,12 @@ class Algorithm:
         return speed
     def calcSpeed(self, visibleObjects):
         pass
+    
+class DebugAlgorithm(Algorithm):
+    def hideDebug(self, sc, O, pos):
+        pass
+    def drawDebug(self, sc, O, pos):
+        pass
 
 class DiscreteTimeSpeedConstraintsAlgorithm(Algorithm):
     def __init__(self, e = 0.52, Olim = 10, Slim = 10):
@@ -248,80 +254,95 @@ class SSND(DSSA, CommunicationRequiredAlgorithm):
         else:
             return np.zeros(3)
 
-class ESF(Algorithm): #Empty sector follower
-    def __init__(self, minEmptySectorDegree = 20, agentSectorDegree = 160, wallSectorDegree = 20, directionStepDegree = 9, baseAlgorithm = CSA()):
-        self.minEmptySec = minEmptySectorDegree / 180.0 * mh.pi
-        self.wallSecHalf = 0.5 * wallSectorDegree / 180.0 * mh.pi
-        self.agentSecHalf = 0.5 * agentSectorDegree / 180.0 * mh.pi
-        self.dirStep = directionStepDegree / 180.0 * mh.pi
+class ESF(DebugAlgorithm): #Empty sector follower
+    def __init__(self, minEmptySectorDegrees = 20, agentSectorDegrees = 120, wallSectorDegrees = 16, baseAlgorithm = SA()):
+        self.minEmptySec = minEmptySectorDegrees / 180.0 * mh.pi
+        self.agentSecHalf = 0.5 * agentSectorDegrees / 180.0 * mh.pi
+        self.wallSecHalf = 0.5 * wallSectorDegrees / 180.0 * mh.pi
         self.baseAlgorithm = baseAlgorithm
-        self.maxSecDebug = (0, 0)
+        self.target = 0
+        self.__debugMaxSector = (0, 0)
 
-    def getRotationMatrix(self, alpha):
-        return np.array([[cos(alpha), -sin(alpha)], [sin(alpha), cos(alpha)]])
-
-    def getAngle(self, U, V):
-        return mh.atan2(mul(U, V), dot(U, V))
+    def hideDebug(self, sc, O, pos):
+        targetDir = np.array([cos(self.__debugOldTarget), sin(self.__debugOldTarget), 0])
+        leftSecBound = np.array([cos(self.__debugOldMaxSector[0]), sin(self.__debugOldMaxSector[0]), 0])
+        rightSecBound = np.array([cos(self.__debugOldMaxSector[1]), sin(self.__debugOldMaxSector[1]), 0])
+        pygame.draw.line(sc, (255, 255, 255), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*targetDir)*scale+O)[:2]), 5)
+        pygame.draw.line(sc, (255, 255, 255), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*leftSecBound)*scale+O)[:2]), 5)
+        pygame.draw.line(sc, (255, 255, 255), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*rightSecBound)*scale+O)[:2]), 5)
         
-    def getObjectSector(self, vec, label):
-        if label == 'Agent':
-            return [np.matmul(self.getRotationMatrix(-self.agentSecHalf), vec[:2]), 
-                    np.matmul(self.getRotationMatrix(self.agentSecHalf), vec[:2])]
-        elif label == 'Wall':
-            return [np.matmul(self.getRotationMatrix(-self.wallSecHalf), vec[:2]), 
-                    np.matmul(self.getRotationMatrix(self.wallSecHalf), vec[:2])]
+    def drawDebug(self, sc, O, pos):
+        self.__debugOldTarget = self.target
+        self.__debugOldMaxSector = self.__debugMaxSector
+        if self.__debugMaxSector[1] - self.__debugMaxSector[0] > self.minEmptySec:
+            targetDir = np.array([cos(self.target), sin(self.target), 0])
+            leftSecBound = np.array([cos(self.__debugMaxSector[0]), sin(self.__debugMaxSector[0]), 0])
+            rightSecBound = np.array([cos(self.__debugMaxSector[1]), sin(self.__debugMaxSector[1]), 0])
+            pygame.draw.line(sc, (255, 165,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*targetDir)*scale+O)[:2]), 3)
+            pygame.draw.line(sc, (  0, 128,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*leftSecBound)*scale+O)[:2]), 3)
+            pygame.draw.line(sc, (  0, 128,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*rightSecBound)*scale+O)[:2]), 3)
 
-    def getAngleDistFromDirToSector(self, dir, sec):
-        la = self.getAngle(dir, sec[0])
-        ra = self.getAngle(dir, sec[1])
-        if la < 0 and ra > 0:
-            return 0
-        return min(abs(la), abs(ra))
-
-    def getAngleDistFromDirToSectors(self, dir, sectors):
-        res = 2 * mh.pi
-        for sec in sectors:
-            res = min(res, self.getAngleDistFromDirToSector(dir, sec))
-            if res == 0:
-                return 0
-        return res
-            
-    def calcSectors(self, visibleObjects):
-        return [self.getObjectSector(v, l) for v, l in zip(visibleObjects['Positions'], visibleObjects['Labels'])]
-
-    def drawDebug(self, sc, O, p):
-        self.prevSec = self.maxSecDebug
-        if self.maxSecDebug[1] - self.maxSecDebug[0] > self.minEmptySec:
-            L = tuple((p + RVis * np.array([cos(self.maxSecDebug[0]), sin(self.maxSecDebug[0])]))*scale + O[:2])
-            R = tuple((p + RVis * np.array([cos(self.maxSecDebug[1]), sin(self.maxSecDebug[1])]))*scale + O[:2])
-            pygame.draw.line(sc, (255, 165, 0), tuple(p*scale+O[:2]), L, 3)
-            pygame.draw.line(sc, (255, 165, 0), tuple(p*scale+O[:2]), R, 3)
-            pygame.draw.circle(sc, (255, 165, 0), L, 5)
-            pygame.draw.circle(sc, (255, 165, 0), R, 5)
+    def __checkSegIntersect(self, l1, r1, l2, r2):
+        return l2 <= l1 and l1 <= r2 or l2 <= r1 and r1 <= r2
         
-    def hideDebug(self, sc, O, p):
-        L = tuple((p + RVis * np.array([cos(self.prevSec[0]), sin(self.prevSec[0])]))*scale + O[:2])
-        R = tuple((p + RVis * np.array([cos(self.prevSec[1]), sin(self.prevSec[1])]))*scale + O[:2])
-        pygame.draw.line(sc, (255, 255, 255), tuple(p*scale+O[:2]), L, 10)
-        pygame.draw.line(sc, (255, 255, 255), tuple(p*scale+O[:2]), R, 10)
-        pygame.draw.circle(sc, (255, 255, 255), L, 15)
-        pygame.draw.circle(sc, (255, 255, 255), R, 15)
-        
+    def calcAngleBraces(self, visibleObjects):
+        angleBraces = []
+        for pos, label in zip(visibleObjects['Positions'], visibleObjects['Labels']):
+            angle = mh.atan2(pos[1], pos[0])
+            if label == 'Wall':
+                l = angle-self.wallSecHalf
+                r = angle+self.wallSecHalf
+            elif label == 'Agent':
+                l = angle-self.agentSecHalf
+                r = angle+self.agentSecHalf
+            if self.__checkSegIntersect(l-2*mh.pi, r-2*mh.pi, -2*mh.pi, 2*mh.pi):
+                angleBraces.append((l-2*mh.pi, 0))
+                angleBraces.append((r-2*mh.pi, 1))
+            angleBraces.append((l, 0))
+            angleBraces.append((r, 1))
+            if self.__checkSegIntersect(l+2*mh.pi, r+2*mh.pi, -2*mh.pi, 2*mh.pi):
+                angleBraces.append((l+2*mh.pi, 0))
+                angleBraces.append((r+2*mh.pi, 1))
+        angleBraces.sort()
+        return angleBraces
+
+    def checkDirection(self, angleBraces):
+        if self.target < -mh.pi:
+            self.target += 2 * mh.pi
+        elif self.target >  mh.pi:
+            self.target -= 2 * mh.pi
+        depth = 0
+        for k, b in enumerate(angleBraces[:-1]):
+            depth += 1 if b[1] == 0 else -1
+            if b[0] <= self.target and self.target <= angleBraces[k+1][0]:
+                if depth == 0 and angleBraces[k+1][0] - b[0] > self.minEmptySec:
+                    self.target = (angleBraces[k+1][0] + b[0]) * 0.5
+                    self.__debugMaxSector = (b[0], angleBraces[k+1][0])
+                    return True
+                else:
+                    return False
+        return True
+
+    def findLargestSector(self, angleBraces):
+        maxSector = (0, 0)
+        depth = 0
+        for k, b in enumerate(angleBraces[:-1]):
+            depth += 1 if b[1] == 0 else -1
+            if depth == 0:
+                angleWidth = angleBraces[k+1][0] - b[0]
+                if maxSector[1] - maxSector[0] < angleWidth:
+                    maxSector = (b[0], b[0] + angleWidth)        
+        return maxSector
+    
     def calcSpeed(self, visibleObjects):
-        sectors = self.calcSectors(visibleObjects)
-        rDir = 0
-        rAng = 0
-        rDst = 0
-        for ang in np.arange(0, 2 * mh.pi, self.dirStep):
-            dir = np.array([cos(ang), sin(ang)])
-            dst = self.getAngleDistFromDirToSectors(dir, sectors)
-            if dst > rDst:
-                rDir = dir
-                rAng = ang
-                rDst = dst
-        
-        self.maxSecDebug = [rAng - rDst, rAng + rDst]
-        if 2 * rDst > self.minEmptySec:
-            return 0.5 * maxV * np.array([rDir[0], rDir[1], 0])
+        angleBraces = self.calcAngleBraces(visibleObjects)
+        if self.checkDirection(angleBraces):
+            return maxV * np.array([cos(self.target), sin(self.target), 0])
+        maxSector = self.findLargestSector(angleBraces)
+        self.__debugMaxSector = maxSector
+        if maxSector[1] - maxSector[0] > self.minEmptySec:
+            self.target = (maxSector[1] + maxSector[0]) * 0.5
+            return maxV * np.array([cos(self.target), sin(self.target), 0])
         else:
             return self.baseAlgorithm.calcSpeed(visibleObjects)
+        
