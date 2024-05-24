@@ -5,7 +5,7 @@ from simulator_base_constants import *
 from math import ceil
 
 def spawnAgents(objs, spawn_point, rCnt, 
-                SpawnR = 300,#100, 
+                SpawnR = 100,#100, 
                 botDist = 1):
     for j in range(0, rCnt):
         position = spawn_point + getRndCrcPnt(SpawnR)

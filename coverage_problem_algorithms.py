@@ -312,16 +312,25 @@ class ESF(DebugAlgorithm): #Empty sector follower
         elif self.target >  mh.pi:
             self.target -= 2 * mh.pi
         depth = 0
+        secDirCnt = 10
+        maxDot = 0
+        newTarget = np.zeros(3)
+        targetDir = np.array([cos(self.target), sin(self.target), 0])
         for k, b in enumerate(angleBraces[:-1]):
             depth += 1 if b[1] == 0 else -1
-            if b[0] <= self.target and self.target <= angleBraces[k+1][0]:
-                if depth == 0 and angleBraces[k+1][0] - b[0] > self.minEmptySec:
-                    self.target = (angleBraces[k+1][0] + b[0]) * 0.5
-                    self.__debugMaxSector = (b[0], angleBraces[k+1][0])
-                    return True
-                else:
-                    return False
-        return True
+            if depth == 0 and angleBraces[k + 1][0] - b[0] > self.minEmptySec:
+                for j in range(0, secDirCnt):
+                    d = (b[0] * j + angleBraces[k+1][0] * (secDirCnt - j)) / secDirCnt
+                    curDot = dot(targetDir, np.array([cos(d), sin(d), 0]))
+                    if curDot > maxDot:
+                        maxDot = curDot
+                        newTarget = d
+                        self.__debugMaxSector = (b[0], angleBraces[k+1][0])
+        if maxDot > 0:
+            self.target = newTarget
+            return True
+        else:
+            return False
 
     def findLargestSector(self, angleBraces):
         maxSector = (0, 0)
