@@ -11,7 +11,7 @@ import pandas as pd
 DEFAULT_WIDTH = 704
 DEFAULT_HEIGHT = 704
 DEFAULT_O = np.array([DEFAULT_WIDTH * 0.5, DEFAULT_HEIGHT * 0.5, 0])
-DEFAULT_ANCHOR_GENERATION_COUNT = 30
+DEFAULT_ANCHOR_GENERATION_COUNT = 15
 
 #задаются константы
 anchorCnt = 1
@@ -23,9 +23,9 @@ scale = 0.5
 spawnAttemtsCount = 100
 spawnGrowthSpeed = 1.1
 
-topologicalOptimization = 0
+topologicalOptimization = 30
 drawing = True
 saving = False
 anchorDrawing = True
 wallsDrawing = True
-maxrunning = 7000#2400 # 1 секунда == 50 кадров
+maxrunning = 10000#2400 # 1 секунда == 50 кадров

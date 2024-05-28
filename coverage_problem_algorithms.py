@@ -142,8 +142,11 @@ class SA(Algorithm):
             if la.norm(secNearest[secId, :]) > la.norm(v):
                 secNearest[secId, :] = v
         meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
-        return self.applySpeedConstraints(self.speedCoef * 
-            sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest]))
+        newV = 0
+        for S in secNearest:
+            Snorm = la.norm(S)
+            newV += -S / Snorm * (1 - Snorm / meanNearest)
+        return self.applySpeedConstraints(self.speedCoef * newV)
 
 class CSA(SA):
     def __init__(self, sectorCount = 6, speedCoef = 20):
@@ -200,8 +203,12 @@ class CSA(SA):
             self.calcShadowAndUpdate(rightRef, la.norm(rightRef), secRightId, weightsSumBySec, secNearest)
         self.calcContinuousNearest(weightsSumBySec, secNearest)
         meanNearest = sum([la.norm(S) for S in secNearest]) / self.secCnt
-        return self.applySpeedConstraints(self.speedCoef * 
-            sum([-S / la.norm(S) * (1 - la.norm(S) / meanNearest) for S in secNearest  if la.norm(S) > 0]))
+        newV = 0
+        for S in secNearest:
+            Snorm = la.norm(S)
+            if Snorm > 0:
+                newV += -S / Snorm * (1 - Snorm / meanNearest)
+        return self.applySpeedConstraints(self.speedCoef * newV)
 
 class DSSA(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequiredAlgorithm):
     def __init__(self, A):
@@ -215,7 +222,7 @@ class DSSA(DiscreteTimeSpeedConstraintsAlgorithm, InitialContextRequiredAlgorith
         return -(D / (self.mu ** 2)) * (RVis - dst) * vec / dst
             
     def calcSpeed(self, visibleObjects):
-        newV = np.array([0.0, 0.0, 0.0])
+        newV = np.zeros(3)
         D = 0
         if self.state == 'ordinary':
             D = len(visibleObjects['Positions'])
@@ -261,7 +268,7 @@ class ESF(DebugAlgorithm): #Empty sector follower
         self.wallSecHalf = 0.5 * wallSectorDegrees / 180.0 * mh.pi
         self.baseAlgorithm = baseAlgorithm
         self.target = 0
-        self.__debugMaxSector = (0, 0)
+        self.maxSector = (0, 0)
 
     def hideDebug(self, sc, O, pos):
         targetDir = np.array([cos(self.__debugOldTarget), sin(self.__debugOldTarget), 0])
@@ -273,11 +280,11 @@ class ESF(DebugAlgorithm): #Empty sector follower
         
     def drawDebug(self, sc, O, pos):
         self.__debugOldTarget = self.target
-        self.__debugOldMaxSector = self.__debugMaxSector
-        if self.__debugMaxSector[1] - self.__debugMaxSector[0] > self.minEmptySec:
+        self.__debugOldMaxSector = self.maxSector
+        if self.maxSector[1] - self.maxSector[0] > self.minEmptySec:
             targetDir = np.array([cos(self.target), sin(self.target), 0])
-            leftSecBound = np.array([cos(self.__debugMaxSector[0]), sin(self.__debugMaxSector[0]), 0])
-            rightSecBound = np.array([cos(self.__debugMaxSector[1]), sin(self.__debugMaxSector[1]), 0])
+            leftSecBound = np.array([cos(self.maxSector[0]), sin(self.maxSector[0]), 0])
+            rightSecBound = np.array([cos(self.maxSector[1]), sin(self.maxSector[1]), 0])
             pygame.draw.line(sc, (255, 165,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*targetDir)*scale+O)[:2]), 3)
             pygame.draw.line(sc, (  0, 128,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*leftSecBound)*scale+O)[:2]), 3)
             pygame.draw.line(sc, (  0, 128,   0), tuple((pos*scale+O)[:2]), tuple(((pos+RVis/3*rightSecBound)*scale+O)[:2]), 3)
@@ -316,8 +323,8 @@ class ESF(DebugAlgorithm): #Empty sector follower
             depth += 1 if b[1] == 0 else -1
             if b[0] <= self.target and self.target <= angleBraces[k+1][0]:
                 if depth == 0 and angleBraces[k+1][0] - b[0] > self.minEmptySec:
-                    self.target = (angleBraces[k+1][0] + b[0]) * 0.5
-                    self.__debugMaxSector = (b[0], angleBraces[k+1][0])
+                    # self.target = (angleBraces[k+1][0] + b[0]) * 0.5
+                    self.maxSector = (b[0], angleBraces[k+1][0])
                     return True
                 else:
                     return False
@@ -336,13 +343,193 @@ class ESF(DebugAlgorithm): #Empty sector follower
     
     def calcSpeed(self, visibleObjects):
         angleBraces = self.calcAngleBraces(visibleObjects)
+        nearestAgentDist = RVis
+        for v, label in zip(visibleObjects['Positions'], visibleObjects['Labels']):
+            vlen = la.norm(v)
+            if label == 'Agent' and vlen < nearestAgentDist:
+                nearestAgentDist = vlen
         if self.checkDirection(angleBraces):
-            return maxV * np.array([cos(self.target), sin(self.target), 0])
+            return np.array([cos(self.target), sin(self.target), 0]) * max(min((1 - nearestAgentDist/RVis) * 10, 1) * maxV, maxV/10)
         maxSector = self.findLargestSector(angleBraces)
-        self.__debugMaxSector = maxSector
+        self.maxSector = maxSector
         if maxSector[1] - maxSector[0] > self.minEmptySec:
             self.target = (maxSector[1] + maxSector[0]) * 0.5
-            return maxV * np.array([cos(self.target), sin(self.target), 0])
+            return np.array([cos(self.target), sin(self.target), 0]) * max(min((1 - nearestAgentDist/RVis) * 10, 1) * maxV, maxV/10)
         else:
             return self.baseAlgorithm.calcSpeed(visibleObjects)
+
+class SAOP(ESF): #Sectors Attracts Obstacles Pushes
+    def __init__(self, speedCoef = 20, minEmptySectorDegrees = 20, agentSectorDegrees = 120, wallSectorDegrees = 30, baseAlgorithm = SA()):
+        super().__init__(minEmptySectorDegrees, agentSectorDegrees, wallSectorDegrees, baseAlgorithm)
+        self.state = 0
+        self.speedCoef = speedCoef
         
+    def calcSectorDirections(self, angleBraces):
+        res = {}
+        depth = 0
+        angleWidthSum = 0
+        dirPerSec = 10
+        for k, b in enumerate(angleBraces[:-1]):
+            depth += 1 if b[1] == 0 else -1
+            if depth == 0:
+                angleWidth = angleBraces[k+1][0] - b[0]
+                if angleWidth > self.minEmptySec:
+                    for j in range(1, dirPerSec - 1):
+                        dir = (angleBraces[k+1][0] * j + b[0] * (dirPerSec - j))/dirPerSec
+                        if dir > mh.pi:
+                            dir -= 2 * mh.pi
+                        elif dir < -mh.pi:
+                            dir += 2 * mh.pi
+                        res[dir] = angleWidth
+        return res
+
+    def calcSectorSum(self, angleBraces):
+        res = {}
+        depth = 0
+        angleWidthSum = 0
+        for k, b in enumerate(angleBraces[:-1]):
+            depth += 1 if b[1] == 0 else -1
+            if depth == 0:
+                angleWidth = angleBraces[k+1][0] - b[0]
+                if angleWidth > self.minEmptySec:
+                    dir = (angleBraces[k+1][0] + b[0])/2
+                    if dir > mh.pi:
+                        dir -= 2 * mh.pi
+                    elif dir < -mh.pi:
+                        dir += 2 * mh.pi
+                    if not dir in res:
+                        res[dir] = angleWidth
+                        angleWidthSum += angleWidth
+        return angleWidthSum
+        
+    def calcSpeed(self, visibleObjects):
+        # secDirs = self.calcSectorDirections(self.calcAngleBraces(visibleObjects))
+        # newV = np.zeros(3)
+        # for dir, w in secDirs.items():
+        #     v = np.array([cos(dir), sin(dir), 0])
+        #     W = mh.sqrt(w / mh.pi)
+        #     newV += v * W
+        # newV = normir(newV) * maxV * 0.75
+        
+        nearestAgentDist = RVis
+        nearestAgent = np.zeros(3)
+        alpha = 0.99
+        agentCnt = 0
+        newV = np.zeros(3)
+        for v, l in zip(visibleObjects['Positions'], visibleObjects['Labels']):
+            if l == 'Agent':
+                vlen = la.norm(v)
+                if vlen < nearestAgentDist:
+                    nearestAgentDist = vlen
+                    nearestAgent = v
+                    agentCnt += 1
+        check = True
+        for v, l in zip(visibleObjects['Positions'], visibleObjects['Labels']):
+            if l == 'Agent':
+                if dot(v, nearestAgent) < 0:
+                    check = False
+                    break
+        if self.state == 2 and self.calcSectorSum(self.calcAngleBraces(visibleObjects)) > self.minEmptySec and agentCnt >= 1 and check and nearestAgentDist < RVis * alpha:
+            self.state = 0
+        if self.state < 2:
+            near = {'Positions': [v for v, l in zip(visibleObjects['Positions'], visibleObjects['Labels'])
+                                       if la.norm(v) < RVis * alpha], 
+                     'Labels': [l for v, l in zip(visibleObjects['Positions'], visibleObjects['Labels'])
+                                   if la.norm(v) < RVis * alpha]}
+            angleBraces = self.calcAngleBraces(near)
+            if self.state == 1:
+                if self.maxSector[1] - self.maxSector[0] > 0 and self.checkDirection(angleBraces):
+                    return np.array([cos(self.target), sin(self.target), 0]) * maxV * (0.5 if agentCnt <= 1 else min((1 - nearestAgentDist/RVis) * 10, 1))
+                else:
+                    self.state = 2
+            elif self.state == 0:
+                maxSec = self.findLargestSector(angleBraces)
+                self.maxSector = maxSec
+                if maxSec[1] - maxSec[0] > self.minEmptySec:
+                    self.state = 1
+                    self.target = (maxSec[1] + maxSec[0]) * 0.5
+                    return np.array([cos(self.target), sin(self.target), 0]) * maxV * (0.5 if agentCnt <= 1 else min((1 - nearestAgentDist/RVis) * 10, 1))
+                else:
+                    self.state = 2
+        elif self.state == 2:
+            self.maxSector = (0, 0)
+            self.target = 0
+            newV = np.zeros(3)
+            wallSum = np.zeros(3)
+            wallWeight = 0
+            wallMinLen = RVis
+            wallMaxLen = 0
+            wallLargest = np.zeros(3)
+            wallNearest = np.zeros(3)
+            nearestAgentDist = RVis
+            meanDist = 0
+            cnt = 0
+            N = [[la.norm(vec)] + list(vec) for vec, l in zip(visibleObjects['Positions'], visibleObjects['Labels']) if l == 'Agent']
+            N.sort()
+            for k, vec in enumerate(N):
+                coef = 1
+                for v in N[:k]:
+                    curDot = dot(vec[1:], v[1:]) / (vec[0] * v[0])
+                    coef = min(coef, (0.5 - max(curDot - 0.5, 0))/0.5)
+                    # if dot(vec[1:], v[1:]) / (vec[0] * v[0]) >= 0.5:
+                    #     check = False
+                    #     break
+                meanDist += coef * vec[0]#la.norm(vec)
+                cnt += coef
+            if cnt > 0:
+                meanDist /= cnt
+            for k, vec in enumerate(N):
+                coef = 1
+                for v in N[:k]:
+                    curDot = dot(vec[1:], v[1:]) / (vec[0] * v[0])
+                    coef = min(coef, (0.5 - max(curDot - 0.5, 0))/0.5)
+                newV += coef * (vec[0]/meanDist - 1.6 + 0.7 * max((vec[0]-0.8*RVis)/(0.2*RVis), 0)) * np.array(vec[1:]) / vec[0]
+            # if len(visibleObjects['Positions']) > 0:
+            #     meanAgentDist = np.mean([la.norm(v) for v, l in zip(visibleObjects['Positions'], visibleObjects['Labels'])])
+            # else:
+            #     meanAgentDist = RVis
+        # for v, label in zip(visibleObjects['Positions'], visibleObjects['Labels']):
+        #     vLen = la.norm(v)
+        #     # newV -= v / vLen * w
+        #     if label == 'Agent':
+        #         newV -= v / vLen * (1 - vLen/meanAgentDist)
+        #         nearestAgentDist = min(nearestAgentDist, vLen)
+        #     if label == 'Wall':
+        #         if vLen > wallMaxLen:
+        #             wallMaxLen = vLen
+        #             wallLargest = v
+        #         if vLen < wallMinLen:
+        #             wallMinLen = vLen
+        #             wallNearest = v
+            # elif label == 'Wall' and vLen < RVis / mh.sqrt(2):
+            #     wallSum -= v / vLen * w
+        # if wallMinLen < RVis:
+        #     newV -= wallNearest / wallMinLen * (1 - wallMinLen / RVis)
+        # if wallMaxLen > 0:
+        #     newV += wallLargest / wallMaxLen * (1 - wallMaxLen / RVis)
+            
+        # maxSec = self.findLargestSector(self.calcAngleBraces(visibleObjects))
+        # if maxSec[1] - maxSec[0] > self.minEmptySec:
+        #     dir = (maxSec[1] + maxSec[0]) * 0.5
+        #     return np.array([cos(dir), sin(dir), 0]) * min((1 - nearestAgentDist/RVis) * 10, 1)  * maxV
+        # else:
+            walls = {'Positions': [v for v, l in zip(visibleObjects['Positions'], visibleObjects['Labels'])
+                                       if l == 'Wall' and la.norm(v) < RVis / mh.sqrt(2)], 
+                     'Labels': [l for v, l in zip(visibleObjects['Positions'], visibleObjects['Labels'])
+                                   if l == 'Wall' and la.norm(v) < RVis / mh.sqrt(2)]}
+            secDirs = self.calcSectorDirections(self.calcAngleBraces(walls))
+            if len(secDirs) > 0:
+                maxDot = 0
+                mV = np.zeros(3)
+                vlen = la.norm(newV)
+                for dir in secDirs:
+                    v = np.array([cos(dir), sin(dir), 0])
+                    curDot = dot(newV, v)
+                    if curDot > maxDot:# and abs(mul(newV, v)) < la.norm(newV):
+                        mV = v * curDot
+                newV = mV
+            # if la.norm(wallSum) > 0:
+            #     newV += wallSum / la.norm(wallSum) * wallWeight 
+            return self.applySpeedConstraints(newV * self.speedCoef)
+        return np.zeros(3)
+
